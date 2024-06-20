@@ -20,6 +20,47 @@ class RSS3PC:
     def __repr__(self):
         return f"({self.data[0]}, {self.data[1]})"
 
+class Matrix:
+    data: list
+    nrows: int
+    ncols: int
+
+    def __init__(self, n, m, data=None):
+        if data is None:
+            data = [0] * (n * m)
+        else:
+            self.data = data
+        self.nrows = n
+        self.ncols = m
+    
+    def row(self, index):
+        if index >= self.nrows:
+            raise IndexError("Index out of range")
+        return self.data[index * self.ncols: (index + 1) * self.ncols]
+    
+    def col(self, index):
+        if index >= self.ncols:
+            raise IndexError("Index out of range")
+        return [self.data[i * self.ncols + index] for i in range(self.nrows)]
+    
+    def dimensions(self):
+        return (self.nrows, self.ncols)
+
+    def __getitem__(self, index):
+        if isinstance(index, tuple):
+            i, j = index
+            return self.data[i * self.ncols + j]
+        return self.row(index)
+    
+    def __setitem__(self, index, value):
+        if isinstance(index, tuple):
+            assert len(index) == 2, "Index must be a tuple of length 2"
+            i, j = index
+            self.data[i * self.ncols + j] = value
+        else:
+            self.data[index * self.ncols: (index + 1) * self.ncols] = value
+    
+
 class Aby3Protocol:
     """
     ABY3 protocol
@@ -161,7 +202,69 @@ class Aby3Protocol:
         return [RSS3PC((lhs[i][0] * rhs[i]) % self.modular, (lhs[i][1] * rhs[i]) % self.modular)\
                 for i in range(len(lhs))]
     
+    def mat_mul_ss(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of secret shared values (n x m)
+        rhs: Matrix of secret shared values (m x k)
+
+        Returns: Matrix of secret shared values (n x k)
+        """
+
+        n, m = lhs.dimensions()
+        m2, k = rhs.dimensions()
+
+        assert m == m2, "Dimensions of matrices do not match"
+
+        LHS = []
+        RHS = []
+
+        for i in range(n):
+            LHS.extend(lhs.row(i) * k)
+            for j in range(k):
+                RHS.extend(rhs.col(j))
+        
+        ret = self.mul_ss(LHS, RHS)
+
+        slices = [[ret[i + j * m] for j in range(n * k)] for i in range(m)]
+
+        result = slices[0]
+        for i in range(1, m):
+            result = self.add_ss(result, slices[i])
+
+        ret_mat = Matrix(n, k, result)
+        return ret_mat
     
+    def mat_mul_sp(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of secret shared values (n x m)
+        rhs: Matrix of public values (m x k)
+
+        Returns: Matrix of secret shared values (n x k)
+        """
+
+        n, m = lhs.dimensions()
+        m2, k = rhs.dimensions()
+
+        assert m == m2, "Dimensions of matrices do not match"
+
+        LHS = []
+        RHS = []
+
+        for i in range(n):
+            LHS.extend(lhs.row(i) * k)
+            for j in range(k):
+                RHS.extend(rhs.col(j))
+        
+        ret = self.mul_sp(LHS, RHS)
+        slices = [[ret[i + j * m] for j in range(n * k)] for i in range(m)]
+
+        result = slices[0]
+        for i in range(1, m):
+            result = self.add_ss(result, slices[i])
+
+        ret_mat = Matrix(n, k, result)
+        return ret_mat
+        
 
 if __name__ == "__main__":
     import sys
