@@ -264,6 +264,48 @@ class Aby3Protocol:
 
         ret_mat = Matrix(n, k, result)
         return ret_mat
+    
+    def mat_add_ss(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of secret shared values (n x m)
+        rhs: Matrix of secret shared values (n x m)
+
+        Returns: Matrix of secret shared values (n x m)
+        """
+
+        n, m = lhs.dimensions()
+        n2, m2 = rhs.dimensions()
+
+        assert n == n2 and m == m2, "Dimensions of matrices do not match"
+
+        LHS = lhs.data
+        RHS = rhs.data
+        
+        ret = self.add_ss(LHS, RHS)
+
+        ret_mat = Matrix(n, m, ret)
+        return ret_mat
+    
+    def mat_add_sp(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of secret shared values (n x m)
+        rhs: Matrix of public values (n x m)
+
+        Returns: Matrix of secret shared values (n x m)
+        """
+
+        n, m = lhs.dimensions()
+        n2, m2 = rhs.dimensions()
+
+        assert n == n2 and m == m2, "Dimensions of matrices do not match"
+
+        LHS = lhs.data
+        RHS = rhs.data
+        
+        ret = self.add_sp(LHS, RHS)
+
+        ret_mat = Matrix(n, m, ret)
+        return ret_mat
         
 
 if __name__ == "__main__":
