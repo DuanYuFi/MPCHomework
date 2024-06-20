@@ -28,8 +28,8 @@ class Aby3Protocol:
     PRNGs: list
     modular: int
 
-    def __init__(self, player_id, modular=256):
-        self.player = Player(player_id, 3)
+    def __init__(self, player_id, modular=256, port_base=None):
+        self.player = Player(player_id, 3, port_base=port_base)
         seed = random.getrandbits(32)
         self.PRNGs = [None, None]
         self.PRNGs[1] = random.Random(seed)
@@ -37,6 +37,10 @@ class Aby3Protocol:
         self.PRNGs[0] = random.Random(seed)
 
         self.modular = modular
+        self.player_id = player_id
+
+    def disconnect(self):
+        self.player.disconnect()
 
     def input_share(self, public: list, owner: int):
         ret = [RSS3PC(0, 0) for _ in range(len(public))]
@@ -63,22 +67,32 @@ class Aby3Protocol:
         
         return ret
 
-    def reveal(self, secret: list):
+    def reveal(self, secret: list, to=None):
         """
         Reveal secret shared values
         """
-        ret = [0 for _ in range(len(secret))]
-        send_buffer = []
+        if to is None:
+            ret = [0 for _ in range(len(secret))]
+            send_buffer = []
 
-        for i in range(len(secret)):
-            ret[i] = (secret[i][0] + secret[i][1]) % self.modular
-            send_buffer.append(secret[i][0])
-        
-        recv_data = self.player.pass_around(send_buffer, 1)
-        for i in range(len(secret)):
-            ret[i] = (ret[i] + recv_data[i]) % self.modular
-        
-        return ret
+            for i in range(len(secret)):
+                ret[i] = (secret[i][0] + secret[i][1]) % self.modular
+                send_buffer.append(secret[i][0])
+            
+            recv_data = self.player.pass_around(send_buffer, 1)
+            for i in range(len(secret)):
+                ret[i] = (ret[i] + recv_data[i]) % self.modular
+            
+            return ret
+        else:
+            if to == (self.player_id + 1) % 3:
+                send_buffer = [secret[i][0] for i in range(len(secret))]
+                self.player.send(send_buffer, 1)
+            elif to == self.player_id:
+                recv = self.player.recv(-1)
+                ret = [(secret[i][0] + secret[i][1] + recv[i]) % self.modular for i in range(len(secret))]
+                return ret
+
     
     def add_ss(self, lhs: list, rhs: list):
         """
@@ -89,6 +103,25 @@ class Aby3Protocol:
 
         return [RSS3PC((_lhs[0] + _rhs[0]) % self.modular, (_lhs[1] + _rhs[1]) % self.modular)\
                 for _lhs, _rhs in zip(lhs, rhs)]
+
+    def add_sp(self, lhs, rhs):
+        """
+        Add secret shared value with public value
+        """
+
+        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        if isinstance(rhs[0], RSS3PC):
+            lhs, rhs = rhs, lhs
+
+        ret = [RSS3PC(lhs[i][0], lhs[i][1]) for i in range(len(lhs))]
+        if self.player_id == 0:
+            for i in range(len(lhs)):
+                ret[i][1] = (ret[i][1] + rhs[i]) % self.modular
+        elif self.player_id == 1:
+            for i in range(len(lhs)):
+                ret[i][0] = (ret[i][0] + rhs[i]) % self.modular
+        
+        return ret
     
     def mul_ss(self, lhs, rhs):
         """

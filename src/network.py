@@ -18,10 +18,13 @@ class Player:
 
     base_port: int = 34267
 
-    def __init__(self, player_id, num_players):
+    def __init__(self, player_id, num_players, port_base=None):
         self.player_id = player_id
         self.parties = list(range(num_players - 1))
         self.num_players = num_players
+
+        if port_base is not None:
+            self.base_port = port_base
 
         server_thread = threading.Thread(target=self.start_server)
         server_thread.start()
@@ -36,7 +39,6 @@ class Player:
         
         server_thread.join()
 
-        self.log_file = open(f"player_{player_id}.log", "w")
         self.recv_buffers = [b'' for _ in range(num_players - 1)]
         self.locks = [threading.Lock() for _ in range(num_players - 1)]
 
@@ -52,7 +54,6 @@ class Player:
     
     def disconnect(self):
         self.boardcast(SIGNAL.TERMINAL)
-        self.log_file.close()
         for thread in self.recv_threads:
             thread.join()
 
