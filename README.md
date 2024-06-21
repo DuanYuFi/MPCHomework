@@ -33,7 +33,7 @@
 - install python package dependencies
 
   ```bash
-  pip3 install torch torchvision
+  pip3 install torch torchvision tqdm
   ```
 
 ## LeNet-5 Privacy Machine Learning
