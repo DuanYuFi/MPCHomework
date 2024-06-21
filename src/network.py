@@ -55,15 +55,14 @@ class Player:
         for thread in self.recv_threads:
             thread.start()
 
-        if debug:
-            self.log_file = open(f"player_{player_id}.log", "w")
-            self.debug = debug
+        self.log_file = open(f"player_{player_id}.log", "w") if debug else None
 
     def disconnect(self):
         self.boardcast(SIGNAL.TERMINAL)
         for thread in self.recv_threads:
             thread.join()
-        self.log_file.close()
+        if self.log_file:
+            self.log_file.close()
 
     def handle_client(self, client_socket: socket.socket):
         print(f"Got connection from {client_socket.getpeername()}")
@@ -74,7 +73,18 @@ class Player:
             port = self.player_id + self.base_port
 
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.bind((host, port))
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        for _ in range(60):
+            try:
+                server.bind((host, port))
+                break
+            except socket.error as e:
+                if e.errno == socket.errno.EADDRINUSE:
+                    time.sleep(1)
+                else:
+                    raise e
+
         server.listen(5)
 
         print("Waiting for connections...")
@@ -100,7 +110,7 @@ class Player:
         # player_offset = -1 means send to previous player
         # player_offset = 1 means send to next player
 
-        if self.debug:
+        if self.log_file:
             self.log_file.write(f"Send {data} to player {player_offset}\n")
 
         data = pickle.dumps(data)
@@ -143,7 +153,7 @@ class Player:
         data = self._recvall(player_idx, size)
         data = pickle.loads(data)
 
-        if self.debug:
+        if self.log_file:
             self.log_file.write(f"Received {data} from player {player_offset}\n")
 
         return data
