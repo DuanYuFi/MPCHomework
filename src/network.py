@@ -18,7 +18,7 @@ class Player:
 
     base_port: int = 34267
 
-    def __init__(self, player_id, num_players, port_base=None):
+    def __init__(self, player_id, num_players, port_base=None, debug=False):
         self.player_id = player_id
         self.parties = list(range(num_players - 1))
         self.num_players = num_players
@@ -51,11 +51,16 @@ class Player:
 
         for thread in self.recv_threads:
             thread.start()
+
+        if debug:
+            self.log_file = open(f"player_{player_id}.log", "w")
+            self.debug = debug
     
     def disconnect(self):
         self.boardcast(SIGNAL.TERMINAL)
         for thread in self.recv_threads:
             thread.join()
+        self.log_file.close()
 
     def handle_client(self, client_socket: socket.socket):
         print(f"Got connection from {client_socket.getpeername()}")
@@ -91,6 +96,9 @@ class Player:
     def send(self, data, player_offset):
         # player_offset = -1 means send to previous player
         # player_offset = 1 means send to next player
+
+        if self.debug:
+            self.log_file.write(f"Send {data} to player {player_offset}\n")
 
         data = pickle.dumps(data)
         data = int.to_bytes(len(data), 4, "big") + data
@@ -129,6 +137,10 @@ class Player:
         size = int.from_bytes(self._recvall(player_idx, 4), "big")
         data = self._recvall(player_idx, size)
         data = pickle.loads(data)
+
+        if self.debug:
+            self.log_file.write(f"Received {data} from player {player_offset}\n")
+
         return data
 
     def pass_around(self, data, offset=1):

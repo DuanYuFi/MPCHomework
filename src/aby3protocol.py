@@ -81,8 +81,8 @@ class Aby3Protocol:
     PRNGs: list
     modular: int
 
-    def __init__(self, player_id, modular=2 ** 64, demical_bit=32, port_base=None):
-        self.player = Player(player_id, 3, port_base=port_base)
+    def __init__(self, player_id, modular=2 ** 64, demical_bit=32, port_base=None, debug=False):
+        self.player = Player(player_id, 3, port_base=port_base, debug=debug)
         seed = random.getrandbits(32)
         self.PRNGs = [None, None]
         self.PRNGs[1] = random.Random(seed)
@@ -176,6 +176,46 @@ class Aby3Protocol:
                 ret[i] /= 2 ** secret[i].decimal
             return ret
 
+    def shift_left(self, shares: list, shift: int):
+        return self.mul_sp(shares, 2 ** shift)
+    
+    def shift_right(self, shares: list, shift: int):
+        ret = [RSS3PC(0, 0) for _ in range(len(shares))]
+        if self.player_id == 0:
+            for i in range(len(shares)):
+                ret[i][0] = shares[i][0] >> shift
+        
+            recv_data = self.player.recv(1)
+            for i in range(len(shares)):
+                ret[i][1] = recv_data[i]
+        
+        elif self.player_id == 1:
+            rs = [self.PRNGs[1].randrange(self.modular) for _ in range(len(shares))]
+            send_buffer = []
+            for i in range(len(shares)):
+                ret[i][0] = ((shares[i][0] + shares[i][1]) % self.modular) >> shift
+                ret[i][0] = (ret[i][0] - rs[i]) % self.modular
+                send_buffer.append(ret[i][0])
+
+                ret[i][1] = rs[i]
+            
+            self.player.send(send_buffer, -1)
+        
+        else:
+            rs = [self.PRNGs[0].randrange(self.modular) for _ in range(len(shares))]
+            for i in range(len(shares)):
+                ret[i][0] = rs[i]
+                ret[i][1] = shares[i][1] >> shift
+        
+        return ret
+
+    def i2f(self, shares: list):
+
+        shares = self.shift_left(shares, self.demical)
+        for i in range(len(shares)):
+            shares[i].set_decimal(self.demical)
+
+        return shares
     
     def add_ss(self, lhs: list, rhs: list):
         """
