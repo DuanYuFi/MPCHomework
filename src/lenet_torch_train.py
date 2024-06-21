@@ -25,13 +25,13 @@ class LeNet5(nn.Module):
         self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
-        x = torch.sigmoid(self.conv1(x))
-        x = nn.functional.avg_pool2d(x, 2)
-        x = torch.sigmoid(self.conv2(x))
-        x = nn.functional.avg_pool2d(x, 2)
+        x = nn.functional.relu(self.conv1(x))
+        x = nn.functional.avg_pool2d(x, kernel_size=2, stride=2)
+        x = nn.functional.relu(self.conv2(x))
+        x = nn.functional.avg_pool2d(x, kernel_size=2, stride=2)
         x = torch.flatten(x, 1)  # 正确展平输入，从维度1开始展平
-        x = torch.sigmoid(self.fc1(x))
-        x = torch.sigmoid(self.fc2(x))
+        x = nn.functional.relu(self.fc1(x))
+        x = nn.functional.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
@@ -39,9 +39,9 @@ class LeNet5(nn.Module):
 # 数据加载和预处理
 transform = transforms.Compose(
     [
-        transforms.Resize((32, 32)),
+        transforms.Resize((28, 28)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)),
+        transforms.Normalize((0.1307,), (0.3081,)),
     ]
 )
 
@@ -66,25 +66,26 @@ model = LeNet5()
 
 # 损失函数和优化器
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # 训练模型
 num_epochs = 10
 for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
-    for i, (inputs, labels) in enumerate(
-        tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
-    ):
+    for i, (inputs, labels) in enumerate(train_loader):
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-        if i % 100 == 99:
-            print(f"Step [{i + 1}/{len(train_loader)}], Loss: {running_loss / 100:.4f}")
+        if (i + 1) % 100 == 0:
+            tqdm.write(
+                f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {running_loss / 100:.4f}"
+            )
             running_loss = 0.0
+
 
 print("Finished Training")
 
@@ -104,6 +105,6 @@ print(f"Accuracy of the network on the 10000 test images: {100 * correct / total
 # 保存模型参数到指定文件夹
 for idx in range(100):
     state_path = os.path.join(out_dir, f"lenet5_params_{idx}.pth")
-    if os.path.exists(state_path):
-        continue
-    torch.save(model.state_dict(), state_path)
+    if not os.path.exists(state_path):
+        torch.save(model.state_dict(), state_path)
+        break
