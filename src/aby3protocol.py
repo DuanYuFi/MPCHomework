@@ -404,6 +404,14 @@ class Aby3Protocol:
         ret_mat = Matrix(n, m, ret)
         return ret_mat
 
+    def mat_div_sp(self, lhs: Matrix, rhs: int):
+        raise NotImplementedError()  # TODO
+
+    def mat_max_sp(self, lhs: Matrix, rhs: Matrix):
+        raise NotImplementedError()  # TODO
+
+    # TODO 四维矩阵或者维度
+
 
 if __name__ == "__main__":
     import sys
