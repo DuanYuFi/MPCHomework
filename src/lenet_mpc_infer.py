@@ -230,12 +230,12 @@ def test_accuracy():
 
     correct = 0
     total = 0
-    with torch.no_grad():
-        for inputs, labels in tqdm(test_loader, desc="Testing"):
-            outputs = infer(inputs)
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+
+    for inputs, labels in tqdm(test_loader, desc="Testing"):
+        outputs = infer(inputs)
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
 
     print(
         f"Accuracy of the network on the 10000 test images: {100 * correct / total} %"
