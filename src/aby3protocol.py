@@ -4,9 +4,11 @@ from network import Player
 
 class RSS3PC:
     data: list
+    decimal: int
 
-    def __init__(self, s1, s2):
+    def __init__(self, s1, s2, decimal=0):
         self.data = [s1, s2]
+        self.decimal = decimal
     
     def __getitem__(self, index):
         return self.data[index]
@@ -19,6 +21,10 @@ class RSS3PC:
 
     def __repr__(self):
         return f"({self.data[0]}, {self.data[1]})"
+    
+    def set_decimal(self, decimal):
+        self.decimal = decimal
+    
 
 class Matrix:
     data: list
@@ -59,7 +65,13 @@ class Matrix:
             self.data[i * self.ncols + j] = value
         else:
             self.data[index * self.ncols: (index + 1) * self.ncols] = value
-    
+
+    def transpose(self):
+        data = []
+        for j in range(self.ncols):
+            data.extend(self.col(j))
+        return Matrix(self.ncols, self.nrows, data)    
+
 
 class Aby3Protocol:
     """
@@ -69,7 +81,7 @@ class Aby3Protocol:
     PRNGs: list
     modular: int
 
-    def __init__(self, player_id, modular=256, port_base=None):
+    def __init__(self, player_id, modular=2 ** 64, demical_bit=32, port_base=None):
         self.player = Player(player_id, 3, port_base=port_base)
         seed = random.getrandbits(32)
         self.PRNGs = [None, None]
@@ -79,11 +91,20 @@ class Aby3Protocol:
 
         self.modular = modular
         self.player_id = player_id
+        self.demical = demical_bit
 
     def disconnect(self):
         self.player.disconnect()
 
     def input_share(self, public: list, owner: int):
+        if isinstance(public[0], int):
+            return self.input_share_i(public, owner)
+        elif isinstance(public[0], float):
+            return self.input_share_f(public, owner)
+        else:
+            raise ValueError(f"Invalid type {type(public[0])} for public value")
+    
+    def input_share_i(self, public: int, owner: int):
         ret = [RSS3PC(0, 0) for _ in range(len(public))]
         
         if owner == self.player.player_id:
@@ -108,10 +129,24 @@ class Aby3Protocol:
         
         return ret
 
+    def input_share_f(self, public: float, owner: int):
+        public = [round(each * 2 ** self.demical) for each in public]
+        ret = self.input_share_i(public, owner)
+        for i in range(len(ret)):
+            ret[i].set_decimal(self.demical)
+        return ret
+
     def reveal(self, secret: list, to=None):
         """
         Reveal secret shared values
         """
+        if secret[0].decimal > 0:
+            return self.reveal_f(secret, to)
+        else:
+            return self.reveal_i(secret, to)
+        
+
+    def reveal_i(self, secret: list, to):
         if to is None:
             ret = [0 for _ in range(len(secret))]
             send_buffer = []
@@ -133,6 +168,13 @@ class Aby3Protocol:
                 recv = self.player.recv(-1)
                 ret = [(secret[i][0] + secret[i][1] + recv[i]) % self.modular for i in range(len(secret))]
                 return ret
+
+    def reveal_f(self, secret: list, to):
+        ret = self.reveal_i(secret, to)
+        if to is None or to == self.player_id:
+            for i in range(len(ret)):
+                ret[i] /= 2 ** secret[i].decimal
+            return ret
 
     
     def add_ss(self, lhs: list, rhs: list):
