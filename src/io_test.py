@@ -1,20 +1,13 @@
-from aby3protocol import *
 import sys
+
+from aby3protocol import *
 
 player_id = int(sys.argv[1])
 protocol = Aby3Protocol(player_id, port_base=23333)
 
-input_i = [
-    [2, 3, 4, 5],
-    [6, 7, 8, 9],
-    [10, 11, 12, 13]
-]
+input_i = [[2, 3, 4, 5], [6, 7, 8, 9], [10, 11, 12, 13]]
 
-input_f = [
-    [2.1, 3.1, 4.1, 5.1],
-    [6.1, 7.1, 8.1, 9.1],
-    [10.1, 11.1, 12.1, 13.1]
-]
+input_f = [[2.1, 3.1, 4.1, 5.1], [6.1, 7.1, 8.1, 9.1], [10.1, 11.1, 12.1, 13.1]]
 
 share_i = [0] * 3
 for i in range(3):

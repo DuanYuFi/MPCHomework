@@ -1,5 +1,6 @@
-from aby3protocol import *
 import sys
+
+from aby3protocol import *
 
 player_id = int(sys.argv[1])
 protocol = Aby3Protocol(player_id, port_base=23333, debug=True)

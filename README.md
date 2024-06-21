@@ -47,5 +47,6 @@
 - Try to infer LeNet-5 in MPC enviroments, only Player-0 will load the picture as model private input.
 
   ```bash
-  bash src/run_script.py lenet_mpc_infer.py
+  cd src/
+  bash ./run_script.py ./lenet_mpc_infer.py
   ```
