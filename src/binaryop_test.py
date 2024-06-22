@@ -6,7 +6,7 @@ player_id = int(sys.argv[1])
 protocol = Aby3Protocol(player_id, port_base=23333)
 
 input_i = [2, -3, 4, -5]
-input_f = [2.7182818284590452353, -3.1415926535897932384, 25.132741228718, -1e-6]
+input_i2 = [8, 1, -2, -9]
 
 def run_test(test_name, lhs, rhs):
     print("Running test:", test_name)
@@ -23,7 +23,7 @@ def run_test(test_name, lhs, rhs):
         print(result)
         print(correct_result)
 
-run_test("add", input_i, input_f)
-run_test("mul", input_i, input_f)
+run_test("add", input_i, input_i2)
+run_test("mul", input_i, input_i2)
 
 protocol.disconnect()

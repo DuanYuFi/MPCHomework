@@ -318,7 +318,9 @@ class Aby3Protocol:
         Add two public values
         """
 
-        return [(lhs[i] + rhs[i]) % self.modular for i in range(len(lhs))]
+        ret = [(lhs[i] + rhs[i]) % self.modular for i in range(len(lhs))]
+        ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+        return ret
 
     def add_ss(self, lhs: list, rhs: list):
         """
@@ -361,7 +363,9 @@ class Aby3Protocol:
         Multiply two public values
         """
 
-        return [(lhs[i] * rhs[i]) % self.modular for i in range(len(lhs))]
+        ret = [(lhs[i] * rhs[i]) % self.modular for i in range(len(lhs))]
+        ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+        return ret
 
     def mul_ss(self, lhs, rhs):
         """
