@@ -107,6 +107,35 @@ class Aby3Protocol:
     def disconnect(self):
         self.player.disconnect()
 
+    @staticmethod
+    def get_type(shares):
+        """
+        return the types of input
+
+        Args:
+            shares: list of RSS3PC or int or float
+
+        Returns:
+            tuple: (bool, bool)
+                bool: True if shares is secret, False if shares is public.
+                bool: True if shares is fixed point, False if shares is integer.
+        """
+
+        if isinstance(shares, Matrix):
+            shares = shares[0]
+
+        if isinstance(shares[0], RSS3PC):
+            if shares[0].decimal > 0:
+                return True, True
+            else:
+                return True, False
+        elif isinstance(shares[0], int):
+            return False, False
+        elif isinstance(shares[0], float):
+            return False, True
+        else:
+            raise ValueError(f"Invalid type {type(shares[0])} for shares")
+
     def input_share(self, public: list, owner: int):
         if all(isinstance(each_public, int) for each_public in public):
             return self.input_share_i(public, owner)
@@ -119,6 +148,7 @@ class Aby3Protocol:
         ret = [RSS3PC(0, 0) for _ in range(len(public))]
 
         if owner == self.player.player_id:
+            public = [each if each >= 0 else each + self.modular for each in public]
             send_buffer = []
             for i in range(len(public)):
                 r = self.PRNGs[0].randrange(self.modular)
@@ -169,6 +199,7 @@ class Aby3Protocol:
             for i in range(len(secret)):
                 ret[i] = (ret[i] + recv_data[i]) % self.modular
 
+            ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
             return ret
         else:
             if to == (self.player_id + 1) % 3:
@@ -180,6 +211,7 @@ class Aby3Protocol:
                     (secret[i][0] + secret[i][1] + recv[i]) % self.modular
                     for i in range(len(secret))
                 ]
+                ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
                 return ret
 
     def reveal_f(self, secret: list, to):
@@ -235,6 +267,58 @@ class Aby3Protocol:
             shares[i].set_decimal(0)
 
         return shares
+    
+    def binary_wrapper(self, operation: str, lhs, rhs):
+        """
+        TODO: multiplication between fixed point numbers
+            needs one truncation.
+
+        Wrapper for all kinds (16) of binary operation.
+        """
+
+        l_type = self.get_type(lhs)
+        r_type = self.get_type(rhs)
+
+        binop_pp = getattr(self, operation + "_pp")
+        binop_ss = getattr(self, operation + "_ss")
+        binop_sp = getattr(self, operation + "_sp")
+
+        if (not l_type[0]) and (not r_type[0]):
+            return binop_pp(lhs, rhs)
+        
+        if l_type[1] == r_type[1]:
+            if l_type[0] == r_type[0]:
+                return binop_ss(lhs, rhs)
+            else:
+                return binop_sp(lhs, rhs)
+
+        # Now, there must one fixed point and one integer. We have to convert integer to fixed point.
+
+        if not l_type[1]:
+            if l_type[0]:
+                lhs = self.i2f(lhs)
+            else:
+                lhs = [each * 2**self.demical for each in lhs]
+        else:
+            if r_type[0]:
+                rhs = self.i2f(rhs)
+            else:
+                rhs = [each * 2**self.demical for each in rhs]
+        
+        if l_type[0] == r_type[0]:
+            return binop_ss(lhs, rhs)
+        else:
+            return binop_sp(lhs, rhs)
+    
+    def add(self, lhs, rhs):
+        return self.binary_wrapper("add", lhs, rhs)
+    
+    def add_pp(self, lhs, rhs):
+        """
+        Add two public values
+        """
+
+        return [(lhs[i] + rhs[i]) % self.modular for i in range(len(lhs))]
 
     def add_ss(self, lhs: list, rhs: list):
         """
@@ -268,6 +352,16 @@ class Aby3Protocol:
                 ret[i][0] = (ret[i][0] + rhs[i]) % self.modular
 
         return ret
+    
+    def mul(self, lhs, rhs):
+        return self.binary_wrapper("mul", lhs, rhs)
+
+    def mul_pp(self, lhs, rhs):
+        """
+        Multiply two public values
+        """
+
+        return [(lhs[i] * rhs[i]) % self.modular for i in range(len(lhs))]
 
     def mul_ss(self, lhs, rhs):
         """
@@ -311,6 +405,29 @@ class Aby3Protocol:
             )
             for i in range(len(lhs))
         ]
+    
+    def mat_mul(self, lhs, rhs):
+        return self.binary_wrapper("mat_mul", lhs, rhs)
+
+    def mat_mul_pp(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of public values (n x m)
+        rhs: Matrix of public values (m x k)
+
+        Returns: Matrix of public values (n x k)
+        """
+
+        n, m = lhs.dimensions()
+        m2, k = rhs.dimensions()
+
+        assert m == m2, "Dimensions of matrices do not match"
+
+        ret = Matrix(n, k)
+        for i in range(n):
+            for j in range(k):
+                ret[i, j] = sum(lhs[i, x] * rhs[x, j] for x in range(m)) % self.modular
+
+        return ret
 
     def mat_mul_ss(self, lhs: Matrix, rhs: Matrix):
         """
@@ -374,6 +491,29 @@ class Aby3Protocol:
 
         ret_mat = Matrix(n, k, result)
         return ret_mat
+
+    def mat_add(self, lhs, rhs):
+        return self.binary_wrapper("mat_add", lhs, rhs)
+    
+    def mat_add_pp(self, lhs: Matrix, rhs: Matrix):
+        """
+        lhs: Matrix of public values (n x m)
+        rhs: Matrix of public values (n x m)
+
+        Returns: Matrix of public values (n x m)
+        """
+
+        n, m = lhs.dimensions()
+        n2, m2 = rhs.dimensions()
+
+        assert n == n2 and m == m2, "Dimensions of matrices do not match"
+
+        ret = Matrix(n, m)
+        for i in range(n):
+            for j in range(m):
+                ret[i, j] = (lhs[i, j] + rhs[i, j]) % self.modular
+
+        return ret
 
     def mat_add_ss(self, lhs: Matrix, rhs: Matrix):
         """
