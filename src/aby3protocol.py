@@ -3,6 +3,12 @@ import random
 from network import Player
 
 
+def arithmetic_shift_right(x, offset, nbits=64):
+    if x >> (nbits - 1):
+        return (x >> offset) + ((2 ** nbits - 1) << (nbits - offset))
+    else:
+        return x >> offset
+
 class RSS3PC:
     data: list
     decimal: int
@@ -84,7 +90,7 @@ class Aby3Protocol:
     modular: int
 
     def __init__(
-        self, player_id, modular=2**64, demical_bit=32, port_base=None, debug=False
+        self, player_id, modular_bit=64, demical_bit=32, port_base=None, debug=False
     ):
         self.player = Player(player_id, 3, port_base=port_base, debug=debug)
         seed = random.getrandbits(32)
@@ -93,9 +99,10 @@ class Aby3Protocol:
         seed = self.player.pass_around(seed, 1)
         self.PRNGs[0] = random.Random(seed)
 
-        self.modular = modular
+        self.modular = 1 << modular_bit
         self.player_id = player_id
         self.demical = demical_bit
+        self.modular_bit = modular_bit
 
     def disconnect(self):
         self.player.disconnect()
@@ -189,7 +196,7 @@ class Aby3Protocol:
         ret = [RSS3PC(0, 0) for _ in range(len(shares))]
         if self.player_id == 0:
             for i in range(len(shares)):
-                ret[i][0] = shares[i][0] >> shift
+                ret[i][0] = arithmetic_shift_right(shares[i][0], shift, self.modular_bit)
 
             recv_data = self.player.recv(1)
             for i in range(len(shares)):
@@ -199,7 +206,7 @@ class Aby3Protocol:
             rs = [self.PRNGs[1].randrange(self.modular) for _ in range(len(shares))]
             send_buffer = []
             for i in range(len(shares)):
-                ret[i][0] = ((shares[i][0] + shares[i][1]) % self.modular) >> shift
+                ret[i][0] = arithmetic_shift_right((shares[i][0] + shares[i][1]) % self.modular, shift, self.modular_bit)
                 ret[i][0] = (ret[i][0] - rs[i]) % self.modular
                 send_buffer.append(ret[i][0])
 
@@ -211,7 +218,7 @@ class Aby3Protocol:
             rs = [self.PRNGs[0].randrange(self.modular) for _ in range(len(shares))]
             for i in range(len(shares)):
                 ret[i][0] = rs[i]
-                ret[i][1] = shares[i][1] >> shift
+                ret[i][1] = arithmetic_shift_right(shares[i][0], shift, self.modular_bit)
 
         return ret
 
