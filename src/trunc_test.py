@@ -10,11 +10,11 @@ if player_id == 0:
 else:
     data = protocol.input_share([0] * 4, 0)
 
-truncated = protocol.shift_right(data, 5)
+truncated = protocol.shift_right(data, 16)
 result = protocol.reveal(truncated, to=0)
 
 if player_id == 0:
     print(result)
-    print([each >> 5 for each in [18664, 21612, 18356, 18412]])
+    print([each >> 16 for each in [18664, 21612, 18356, 18412]])
 
 protocol.disconnect()

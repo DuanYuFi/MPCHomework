@@ -108,9 +108,9 @@ class Aby3Protocol:
         self.player.disconnect()
 
     def input_share(self, public: list, owner: int):
-        if isinstance(public[0], int):
+        if all(isinstance(each_public, int) for each_public in public):
             return self.input_share_i(public, owner)
-        elif isinstance(public[0], float):
+        elif any(isinstance(each_public, float) for each_public in public):
             return self.input_share_f(public, owner)
         else:
             raise ValueError(f"Invalid type {type(public[0])} for public value")
@@ -190,7 +190,7 @@ class Aby3Protocol:
             return ret
 
     def shift_left(self, shares: list, shift: int):
-        return self.mul_sp(shares, 2**shift)
+        return self.mul_sp(shares, [2**shift] * len(shares))
 
     def shift_right(self, shares: list, shift: int):
         ret = [RSS3PC(0, 0) for _ in range(len(shares))]
@@ -223,10 +223,16 @@ class Aby3Protocol:
         return ret
 
     def i2f(self, shares: list):
-
         shares = self.shift_left(shares, self.demical)
         for i in range(len(shares)):
             shares[i].set_decimal(self.demical)
+
+        return shares
+    
+    def f2i(self, shares: list):
+        shares = self.shift_right(shares, self.demical)
+        for i in range(len(shares)):
+            shares[i].set_decimal(0)
 
         return shares
 
