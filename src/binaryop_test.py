@@ -6,13 +6,15 @@ player_id = int(sys.argv[1])
 protocol = Aby3Protocol(player_id, port_base=23333)
 
 input_i = [2, -3, 4, -5]
-input_i2 = [8, 1, -2, -9]
+input_f = [8.71828, 1.12345, -2.675654, -9.75645]
 
 def run_test(test_name, lhs, rhs):
     print("Running test:", test_name)
     
-    share1 = protocol.input_share(lhs, 0)
+    # share1 = protocol.input_share(lhs, 0)
     share2 = protocol.input_share(rhs, 0)
+    share1 = lhs
+    # share2 = rhs
 
     result = getattr(protocol, test_name)(share1, share2)
     result = protocol.reveal(result, to=0)
@@ -23,7 +25,7 @@ def run_test(test_name, lhs, rhs):
         print(result)
         print(correct_result)
 
-run_test("add", input_i, input_i2)
-run_test("mul", input_i, input_i2)
+# run_test("add", input_i, input_f)
+run_test("mul", input_i, input_f)
 
 protocol.disconnect()
