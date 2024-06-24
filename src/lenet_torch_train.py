@@ -103,8 +103,5 @@ with torch.no_grad():
 print(f"Accuracy of the network on the 10000 test images: {100 * correct / total} %")
 
 # 保存模型参数到指定文件夹
-for idx in range(100):
-    state_path = os.path.join(out_dir, f"lenet5_params_{idx}.pth")
-    if not os.path.exists(state_path):
-        torch.save(model.state_dict(), state_path)
-        break
+state_path = os.path.join(out_dir, f"lenet5_params.pth")
+torch.save(model.state_dict(), state_path)

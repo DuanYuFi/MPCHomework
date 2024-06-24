@@ -171,34 +171,30 @@ def infer(inputs):
     }
     """
     # player0 和 player1 分别持有
+    valid_params = torch.load(os.path.join(out_dir, f"lenet5_params.pth"))
     if protocol.player_id == 0:
-        secret_params, input_data = (
-            torch.load(os.path.join(out_dir, f"lenet5_params_0.pth")),
-            None,
-        )
+        secret_params, input_data = valid_params, None
     elif protocol.player_id == 1:
-        secret_params, input_data = (
-            torch.load(os.path.join(out_dir, f"lenet5_params_1.pth")),
-            None,
-        )
-    elif protocol.player_id == 2:
-        valid_params = torch.load(os.path.join(out_dir, f"lenet5_params_0.pth"))
         # load valid params, but we do not need the value, just replace weights with zeros
         # since player2 do not know any about model params
         secret_params = {k: torch.zeros_like(v) for k, v in valid_params}
         input_data = inputs
+    elif protocol.player_id == 2:
+        # load valid params, but we do not need the value, just replace weights with zeros
+        # since player2 do not know any about model params
+        secret_params = {k: torch.zeros_like(v) for k, v in valid_params}
+        input_data = None
     else:
         assert False, "unreachable"
 
-    params_shared = {}
-    for k, v in secret_params.items():
-        params_shared0 = protocol.input_share(v.numpy().flatten().tolist(), 0)
-        params_shared1 = protocol.input_share(v.numpy().flatten().tolist(), 1)
-        # calc average
-        params_sum = protocol.mat_add_ss(params_shared0, params_shared1)
-        params_shared[k] = protocol.mat_div_sp(params_sum, 2)
+    # noleak
+    del valid_params
 
-    X_shared = protocol.input_share(input_data, 2)
+    params_shared = {
+        k: protocol.input_share(v.numpy().flatten().tolist(), 0)
+        for k, v in secret_params.items()
+    }
+    X_shared = protocol.input_share(input_data, 1)
 
     # 模型前向传播推理
     outputs = lenet_forward(X_shared, params_shared, protocol)
