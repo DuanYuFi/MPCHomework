@@ -42,7 +42,7 @@ class Matrix:
 
     def __init__(self, n, m, data=None):
         if data is None:
-            data = [0] * (n * m)
+            self.data = [0] * (n * m)
         else:
             self.data = data
         self.nrows = n
@@ -81,7 +81,15 @@ class Matrix:
             data.extend(self.col(j))
         return Matrix(self.ncols, self.nrows, data)
 
-
+    def __str__(self):
+        each_width = [max(len(str(each)) for each in self.col(i)) + 1 for i in range(self.ncols)]
+        ret = ""
+        for i in range(self.nrows):
+            ret += '[' + ' '.join([str(self[i, j]).rjust(each_width[j]) for j in range(self.ncols)]) + ']\n'
+        return ret
+    
+    def __repr__(self):
+        return self.__str__()
 class Aby3Protocol:
     """
     ABY3 protocol
@@ -138,7 +146,10 @@ class Aby3Protocol:
         else:
             raise ValueError(f"Invalid type {type(shares[0])} for shares")
 
-    def input_share(self, public: list, owner: int):
+    def input_share(self, public, owner: int):
+        if isinstance(public , Matrix):
+            return Matrix(public.nrows, public.ncols, self.input_share(public.data, owner))
+        
         if all(isinstance(each_public, int) for each_public in public):
             return self.input_share_i(public, owner)
         elif any(isinstance(each_public, float) for each_public in public):
@@ -183,6 +194,10 @@ class Aby3Protocol:
         """
         Reveal secret shared values
         """
+
+        if isinstance(secret, Matrix):
+            return Matrix(secret.nrows, secret.ncols, self.reveal(secret.data, to))
+
         if secret[0].decimal > 0:
             return self.reveal_f(secret, to)
         else:
@@ -267,7 +282,10 @@ class Aby3Protocol:
 
         return ret
 
-    def i2f(self, shares: list):
+    def i2f(self, shares):
+        if isinstance(shares, Matrix):
+            return Matrix(shares.nrows, shares.ncols, self.i2f(shares.data))
+
         if isinstance(shares[0], int):
             return [float(each) for each in shares]
         
@@ -278,6 +296,9 @@ class Aby3Protocol:
         return shares
     
     def f2i(self, shares: list):
+        if isinstance(shares, Matrix):
+            return Matrix(shares.nrows, shares.ncols, self.f2i(shares.data))
+
         if isinstance(shares[0], float):
             return [int(each) for each in shares]
         
@@ -332,6 +353,10 @@ class Aby3Protocol:
         
         elif operation == "mat_mul":
             ret = Matrix(ret.nrows, ret.ncols, self.shift_right(ret.data, self.demical))
+            for i in range(len(ret.data)):
+                ret.data[i].set_decimal(self.demical)
+            
+            return ret
 
         for i in range(len(ret)):
             ret[i].set_decimal(self.demical)

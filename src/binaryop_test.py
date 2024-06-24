@@ -11,10 +11,8 @@ input_f = [8.71828, 1.12345, -2.675654, -9.75645]
 def run_test(test_name, lhs, rhs):
     print("Running test:", test_name)
     
-    # share1 = protocol.input_share(lhs, 0)
+    share1 = protocol.input_share(lhs, 0)
     share2 = protocol.input_share(rhs, 0)
-    share1 = lhs
-    # share2 = rhs
 
     result = getattr(protocol, test_name)(share1, share2)
     result = protocol.reveal(result, to=0)
@@ -25,7 +23,8 @@ def run_test(test_name, lhs, rhs):
         print(result)
         print(correct_result)
 
-# run_test("add", input_i, input_f)
+run_test("add", input_i, input_f)
 run_test("mul", input_i, input_f)
+run_test("mat_mul", Matrix(2, 2, input_i), Matrix(2, 2, input_f))
 
 protocol.disconnect()
