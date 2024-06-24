@@ -5,9 +5,10 @@ from network import Player
 
 def arithmetic_shift_right(x, offset, nbits=64):
     if x >> (nbits - 1):
-        return (x >> offset) + ((2 ** nbits - 1) << (nbits - offset))
+        return (x >> offset) + ((2**nbits - 1) << (nbits - offset))
     else:
         return x >> offset
+
 
 class RSS3PC:
     data: list
@@ -82,14 +83,24 @@ class Matrix:
         return Matrix(self.ncols, self.nrows, data)
 
     def __str__(self):
-        each_width = [max(len(str(each)) for each in self.col(i)) + 1 for i in range(self.ncols)]
+        each_width = [
+            max(len(str(each)) for each in self.col(i)) + 1 for i in range(self.ncols)
+        ]
         ret = ""
         for i in range(self.nrows):
-            ret += '[' + ' '.join([str(self[i, j]).rjust(each_width[j]) for j in range(self.ncols)]) + ']\n'
+            ret += (
+                "["
+                + " ".join(
+                    [str(self[i, j]).rjust(each_width[j]) for j in range(self.ncols)]
+                )
+                + "]\n"
+            )
         return ret
-    
+
     def __repr__(self):
         return self.__str__()
+
+
 class Aby3Protocol:
     """
     ABY3 protocol
@@ -147,9 +158,11 @@ class Aby3Protocol:
             raise ValueError(f"Invalid type {type(shares[0])} for shares")
 
     def input_share(self, public, owner: int):
-        if isinstance(public , Matrix):
-            return Matrix(public.nrows, public.ncols, self.input_share(public.data, owner))
-        
+        if isinstance(public, Matrix):
+            return Matrix(
+                public.nrows, public.ncols, self.input_share(public.data, owner)
+            )
+
         if all(isinstance(each_public, int) for each_public in public):
             return self.input_share_i(public, owner)
         elif any(isinstance(each_public, float) for each_public in public):
@@ -216,7 +229,10 @@ class Aby3Protocol:
             for i in range(len(secret)):
                 ret[i] = (ret[i] + recv_data[i]) % self.modular
 
-            ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+            ret = [
+                each if each < self.modular // 2 else each - self.modular
+                for each in ret
+            ]
             return ret
         else:
             if to == (self.player_id + 1) % 3:
@@ -228,7 +244,10 @@ class Aby3Protocol:
                     (secret[i][0] + secret[i][1] + recv[i]) % self.modular
                     for i in range(len(secret))
                 ]
-                ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+                ret = [
+                    each if each < self.modular // 2 else each - self.modular
+                    for each in ret
+                ]
                 return ret
 
     def reveal_f(self, secret: list, to):
@@ -237,10 +256,13 @@ class Aby3Protocol:
             for i in range(len(ret)):
                 ret[i] /= 2 ** secret[i].decimal
             return ret
-        
+
     def reduce(self, share: list, mod_bit):
         modular = 1 << mod_bit
-        return [RSS3PC(each[0] % modular, each[1] % modular, modular=mod_bit) for each in share]
+        return [
+            RSS3PC(each[0] % modular, each[1] % modular, modular=mod_bit)
+            for each in share
+        ]
 
     def raise_bit(self, shares: list, raise_bit: int):
         pass
@@ -249,7 +271,7 @@ class Aby3Protocol:
         return self.mul_sp(shares, [2**shift] * len(shares))
 
     def shift_right(self, shares: list, shift: int):
-        
+
         mod_bit = shares[0].modular
         modular = 1 << mod_bit
 
@@ -266,7 +288,9 @@ class Aby3Protocol:
             rs = [self.PRNGs[1].randrange(modular) for _ in range(len(shares))]
             send_buffer = []
             for i in range(len(shares)):
-                ret[i][0] = arithmetic_shift_right((shares[i][0] + shares[i][1]) % modular, shift, mod_bit)
+                ret[i][0] = arithmetic_shift_right(
+                    (shares[i][0] + shares[i][1]) % modular, shift, mod_bit
+                )
                 ret[i][0] = (ret[i][0] - rs[i]) % modular
                 send_buffer.append(ret[i][0])
 
@@ -288,26 +312,26 @@ class Aby3Protocol:
 
         if isinstance(shares[0], int):
             return [float(each) for each in shares]
-        
+
         shares = self.shift_left(shares, self.demical)
         for i in range(len(shares)):
             shares[i].set_decimal(self.demical)
 
         return shares
-    
+
     def f2i(self, shares: list):
         if isinstance(shares, Matrix):
             return Matrix(shares.nrows, shares.ncols, self.f2i(shares.data))
 
         if isinstance(shares[0], float):
             return [int(each) for each in shares]
-        
+
         shares = self.shift_right(shares, self.demical)
         for i in range(len(shares)):
             shares[i].set_decimal(0)
 
         return shares
-    
+
     def binary_wrapper(self, operation: str, lhs, rhs):
         """
         TODO: multiplication between fixed point numbers
@@ -326,45 +350,45 @@ class Aby3Protocol:
         binop_sp = getattr(self, operation + "_sp")
 
         if (not l_type[0]) and (not r_type[0]):
-            return binop_pp(lhs, rhs)       # public and public
-        
-        if (not l_type[1]) and (not r_type[1]):   # integer and integer
+            return binop_pp(lhs, rhs)  # public and public
+
+        if (not l_type[1]) and (not r_type[1]):  # integer and integer
             if l_type[0] and r_type[0]:
                 return binop_ss(lhs, rhs)
             else:
                 return binop_sp(lhs, rhs)
-            
-        elif l_type[1] != r_type[1]:    # fixed point and integer
+
+        elif l_type[1] != r_type[1]:  # fixed point and integer
             if not l_type[1]:
                 lhs = self.i2f(lhs)
             else:
                 rhs = self.i2f(rhs)
 
         # now both are fixed point numbers
-        
+
         if l_type[0] != r_type[0]:
             ret = binop_sp(lhs, rhs)
-        
+
         else:
             ret = binop_ss(lhs, rhs)
 
         if operation == "mul":
             ret = self.shift_right(ret, self.demical)
-        
+
         elif operation == "mat_mul":
             ret = Matrix(ret.nrows, ret.ncols, self.shift_right(ret.data, self.demical))
             for i in range(len(ret.data)):
                 ret.data[i].set_decimal(self.demical)
-            
+
             return ret
 
         for i in range(len(ret)):
             ret[i].set_decimal(self.demical)
         return ret
-    
+
     def add(self, lhs, rhs):
         return self.binary_wrapper("add", lhs, rhs)
-    
+
     def add_pp(self, lhs, rhs):
         """
         Add two public values
@@ -384,9 +408,7 @@ class Aby3Protocol:
         modular = 1 << mod_bit
 
         return [
-            RSS3PC(
-                (_lhs[0] + _rhs[0]) % modular, (_lhs[1] + _rhs[1]) % modular
-            )
+            RSS3PC((_lhs[0] + _rhs[0]) % modular, (_lhs[1] + _rhs[1]) % modular)
             for _lhs, _rhs in zip(lhs, rhs)
         ]
 
@@ -402,7 +424,7 @@ class Aby3Protocol:
 
         mod_bit = lhs[0].modular
         modular = 1 << mod_bit
-        
+
         if isinstance(rhs[0], float):
             rhs = [round(each * 2**self.demical) for each in rhs]
 
@@ -415,7 +437,7 @@ class Aby3Protocol:
                 ret[i][0] = (ret[i][0] + rhs[i]) % modular
 
         return ret
-    
+
     def mul(self, lhs, rhs):
         return self.binary_wrapper("mul", lhs, rhs)
 
@@ -474,12 +496,10 @@ class Aby3Protocol:
             rhs = [round(each * 2**self.demical) for each in rhs]
 
         return [
-            RSS3PC(
-                (lhs[i][0] * rhs[i]) % modular, (lhs[i][1] * rhs[i]) % modular
-            )
+            RSS3PC((lhs[i][0] * rhs[i]) % modular, (lhs[i][1] * rhs[i]) % modular)
             for i in range(len(lhs))
         ]
-    
+
     def mat_mul(self, lhs, rhs):
         return self.binary_wrapper("mat_mul", lhs, rhs)
 
@@ -550,9 +570,13 @@ class Aby3Protocol:
 
         if isinstance(rhs.data[0], RSS3PC):
             lhs, rhs = rhs, lhs
-        
+
         if isinstance(rhs.data[0], float):
-            rhs = Matrix(rhs.nrows, rhs.ncols, [round(each * 2**self.demical) for each in rhs.data])
+            rhs = Matrix(
+                rhs.nrows,
+                rhs.ncols,
+                [round(each * 2**self.demical) for each in rhs.data],
+            )
 
         LHS = []
         RHS = []
@@ -574,7 +598,7 @@ class Aby3Protocol:
 
     def mat_add(self, lhs, rhs):
         return self.binary_wrapper("mat_add", lhs, rhs)
-    
+
     def mat_add_pp(self, lhs: Matrix, rhs: Matrix):
         """
         lhs: Matrix of public values (n x m)
@@ -637,12 +661,12 @@ class Aby3Protocol:
         ret_mat = Matrix(n, m, ret)
         return ret_mat
 
-    def mat_div_sp(self, lhs: Matrix, rhs: int):
+    def div_sp(self, lhs, rhs: int):
         raise NotImplementedError()  # TODO
 
-    def mat_max_sp(self, lhs: Matrix, rhs: Matrix):
+    def max_sp(self, lhs, rhs: int):
         raise NotImplementedError()  # TODO
-    
+
     def mat_ltz(self, lhs: Matrix):
         raise NotImplementedError()  # TODO
 

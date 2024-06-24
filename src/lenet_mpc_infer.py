@@ -13,33 +13,44 @@ cur_dir = os.path.dirname(__file__)
 out_dir = os.path.join(cur_dir, "lenet_outdir")
 
 
+class MatrixND(np.ndarray):
+    def __new__(cls, dims, data=None):
+        if data is None:
+            data = np.zeros(dims, dtype=object)
+        obj = np.asarray(data).reshape(dims).view(cls)
+        return obj
+
+    def to_mpc_matrix(self):
+        dims = self.shape
+        assert len(dims) == 2
+        flat_data = self.flatten()
+        return Matrix(dims[0], dims[1], flat_data)
+
+    @classmethod
+    def from_mpc_matrix(cls, matrix: Matrix) -> "MatrixND":
+        dim = matrix.dimensions()
+        data = np.array(matrix.data).reshape(dim)
+        return cls(dim, data)
+
+
 # 卷积操作
 # TODO: Need Check
 def conv2d(
-    X: Matrix,
-    W: Matrix,
-    b: Matrix,
+    X: MatrixND,
+    W: MatrixND,
+    b: MatrixND,
     stride: int = 1,
     padding: int = 0,
     protocol: Aby3Protocol = None,
-) -> Matrix:
-    raise NotImplementedError()  # TODO
-
-    (n_H_prev, n_W_prev) = X.dimensions()
-    (f, f, n_C_prev, n_C) = W.dimensions()
+) -> MatrixND:
+    (n_H_prev, n_W_prev) = X.shape[1:3]
+    (f, _, n_C_prev, n_C) = W.shape
     n_H = int((n_H_prev - f + 2 * padding) / stride) + 1
     n_W = int((n_W_prev - f + 2 * padding) / stride) + 1
-    Z = Matrix(n_H, n_W * n_C)
+    Z = np.zeros((X.shape[0], n_H, n_W, n_C), dtype=object)
 
     X_pad = np.pad(
-        np.array(X.data).reshape(n_H_prev, n_W_prev, n_C_prev),
-        ((padding, padding), (padding, padding), (0, 0)),
-        "constant",
-    )
-    X_pad = Matrix(
-        n_H_prev + 2 * padding,
-        n_W_prev + 2 * padding * n_C_prev,
-        X_pad.flatten().tolist(),
+        X, ((0, 0), (padding, padding), (padding, padding), (0, 0)), "constant"
     )
 
     for h in range(n_H):
@@ -49,22 +60,30 @@ def conv2d(
                 vert_end = vert_start + f
                 horiz_start = w * stride
                 horiz_end = horiz_start + f
-                X_slice = X_pad[vert_start:vert_end, horiz_start:horiz_end]
-                Z[h, w * n_C + c] = protocol.mat_mul_ss(X_slice, W).data[0] + b.data[c]
+                X_slice = X_pad[:, vert_start:vert_end, horiz_start:horiz_end, :]
+                Z[:, h, w, c] = protocol.add_ss(
+                    protocol.mat_mul_ss(
+                        Matrix(f, f, [item for sublist in X_slice for item in sublist]),
+                        Matrix(
+                            f,
+                            f,
+                            [item for sublist in W[:, :, :, c] for item in sublist],
+                        ),
+                    ),
+                    b[c],
+                )
 
-    return Z
+    return MatrixND(Z.shape, Z)
 
 
 # 平均池化操作
 def avg_pool(
-    X: Matrix, f: int = 2, stride: int = 2, protocol: Aby3Protocol = None
-) -> Matrix:
-    raise NotImplementedError()  # TODO
-
-    (n_H_prev, n_W_prev) = X.dimensions()
+    X: MatrixND, f: int = 2, stride: int = 2, protocol: Aby3Protocol = None
+) -> MatrixND:
+    (n_H_prev, n_W_prev, n_C_prev) = X.shape[1:]
     n_H = int(1 + (n_H_prev - f) / stride)
     n_W = int(1 + (n_W_prev - f) / stride)
-    Z = Matrix(n_H, n_W)
+    Z = np.zeros((X.shape[0], n_H, n_W, n_C_prev), dtype=object)
 
     for h in range(n_H):
         for w in range(n_W):
@@ -73,79 +92,120 @@ def avg_pool(
             horiz_start = w * stride
             horiz_end = horiz_start + f
 
-            sum_val = protocol.input_share([0], 0)
-            for i in range(vert_start, vert_end):
-                for j in range(horiz_start, horiz_end):
-                    sum_val = protocol.add_ss(
-                        sum_val, protocol.input_share([X[i, j]], 0)
-                    )
+            # 将 sum_vals 初始值设置为池化窗口中的第一个加数
+            sum_vals = X[:, vert_start, horiz_start, :]
 
-            Z[h, w] = sum_val[0] / (f * f)
+            for i in range(f):
+                for j in range(f):
+                    if i == 0 and j == 0:
+                        continue  # 第一个值已经设置为 sum_vals 的初始值
+                    X_slice = X[:, vert_start + i, horiz_start + j, :]
+                    sum_vals = np.array(
+                        [
+                            protocol.add_ss(sum_vals[b, c], X_slice[b, c])
+                            for b in range(X.shape[0])
+                            for c in range(n_C_prev)
+                        ]
+                    ).reshape(X.shape[0], n_C_prev)
 
-    return Z
+            div_vals = np.array(
+                [
+                    protocol.div_sp(sum_vals[b, c], f * f)
+                    for b in range(X.shape[0])
+                    for c in range(n_C_prev)
+                ]
+            ).reshape(X.shape[0], n_C_prev)
+            Z[:, h, w, :] = div_vals
+
+    return MatrixND(Z.shape, Z)
 
 
 # ReLU 激活函数
-def relu(X: Matrix, protocol: Aby3Protocol = None) -> Matrix:
-    (n_H, n_W) = X.dimensions()
-    zero_matrix = Matrix(n_H, n_W, data=None)
-    X_relu = protocol.mat_max_sp(X, zero_matrix)
-    return X_relu
+def relu(X: MatrixND, protocol: Aby3Protocol = None) -> MatrixND:
+    zero_matrix = np.zeros(X.shape, dtype=object)
+    relu_output = np.empty(X.shape, dtype=object)
+
+    for idx, _ in np.ndenumerate(X.data):
+        relu_output[idx] = protocol.max_sp(X[idx], zero_matrix[idx])
+
+    return MatrixND(X.shape, relu_output)
 
 
-# 扁平化
-def flatten(X: Matrix) -> Matrix:
-    (n_H, n_W) = X.dimensions()
-    return Matrix(1, n_H * n_W, X.data)
+# 扁平化，保留 batchsize 的维度
+def flatten(X: MatrixND) -> MatrixND:
+    return MatrixND((X.shape[0], -1), X.flatten())
 
 
 # 全连接层
-def dense(X: Matrix, W: Matrix, b: Matrix, protocol: Aby3Protocol = None) -> Matrix:
-    X_flat = flatten(X)
-    Z = protocol.mat_mul_ss(X_flat, W)
-    Z = protocol.mat_add_sp(Z, b)
-    return Z
+def dense(
+    X: MatrixND, W: MatrixND, b: MatrixND, protocol: Aby3Protocol = None
+) -> MatrixND:
+    Z = protocol.mat_mul_ss(X.to_mpc_matrix(), W.T.to_mpc_matrix())
+    batch_size = X.shape[0]
+    b_reshaped = np.tile(b, (batch_size, 1))
+    Z = protocol.mat_add_ss(Z, MatrixND(b_reshaped.shape, b_reshaped).to_mpc_matrix())
+    Z_dims = (batch_size, W.shape[0])
+    return MatrixND(Z_dims, Z.data)
 
 
 # LeNet-5 前向传播
-def lenet_forward(X: Matrix, params: dict, protocol: Aby3Protocol) -> Matrix:
+def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND:
     # 卷积层 1 -> ReLU -> 池化层 1
     X = conv2d(
         X,
-        params["conv1.weight"],
-        params["conv1.bias"],
+        params["conv1.weight"],  # torch.Size([6, 1, 5, 5]),
+        params["conv1.bias"],  # torch.Size([6]),
         stride=1,
         padding=2,
         protocol=protocol,
     )
-    X = relu(X, protocol)
-    X = avg_pool(X, f=2, stride=2, protocol=protocol)
+    X = relu(X, protocol)  # conv0 output shape:  (1, 6, 28, 28)
+    X = avg_pool(
+        X, f=2, stride=2, protocol=protocol
+    )  # pool0 output shape:  (1, 6, 14, 14)
 
     # 卷积层 2 -> ReLU -> 池化层 2
     X = conv2d(
         X,
-        params["conv2.weight"],
-        params["conv2.bias"],
+        params["conv2.weight"],  # torch.Size([16, 6, 5, 5]),
+        params["conv2.bias"],  # torch.Size([16]),
         stride=1,
         padding=0,
         protocol=protocol,
-    )
+    )  # conv1 output shape:  (1, 16, 10, 10)
     X = relu(X, protocol)
-    X = avg_pool(X, f=2, stride=2, protocol=protocol)
+    X = avg_pool(
+        X, f=2, stride=2, protocol=protocol
+    )  # pool1 output shape:  (1, 16, 5, 5)
 
     # 扁平化
     X = flatten(X)
 
     # 全连接层 1 -> ReLU
-    X = dense(X, params["fc1.weight"], params["fc1.bias"], protocol)
+    X = dense(
+        X,
+        params["fc1.weight"],  # torch.Size([120, 400]),
+        params["fc1.bias"],  # torch.Size([120]),
+        protocol,
+    )  # dense0 output shape:         (1, 120)
     X = relu(X, protocol)
 
     # 全连接层 2 -> ReLU
-    X = dense(X, params["fc2.weight"], params["fc2.bias"], protocol)
-    X = relu(X, protocol)
+    X = dense(
+        X,
+        params["fc2.weight"],  # torch.Size([84, 120]),
+        params["fc2.bias"],  # torch.Size([84]),
+        protocol,
+    )
+    X = relu(X, protocol)  # dense1 output shape:         (1, 84)
 
     # 输出层
-    X = dense(X, params["fc3.weight"], params["fc3.bias"], protocol)
+    X = dense(
+        X,
+        params["fc3.weight"],  # torch.Size([10, 84])
+        params["fc3.bias"],  # torch.Size([10]),
+        protocol,
+    )  # dense2 output shape:         (1, 10)
 
     return X
 
@@ -155,35 +215,20 @@ def infer(inputs):
     protocol = Aby3Protocol(player_id)
 
     # 从文件中读取参数和输入数据
-    """
-    ====== secret_params ======
-    {
-        'conv1.bias': torch.Size([6]),
-        'conv1.weight': torch.Size([6, 1, 5, 5]),
-        'conv2.bias': torch.Size([16]),
-        'conv2.weight': torch.Size([16, 6, 5, 5]),
-        'fc1.bias': torch.Size([120]),
-        'fc1.weight': torch.Size([120, 400]),
-        'fc2.bias': torch.Size([84]),
-        'fc2.weight': torch.Size([84, 120]),
-        'fc3.bias': torch.Size([10]),
-        'fc3.weight': torch.Size([10, 84])
-    }
-    """
     # player0 和 player1 分别持有
     valid_params = torch.load(os.path.join(out_dir, f"lenet5_params.pth"))
     if protocol.player_id == 0:
-        secret_params, input_data = valid_params, None
+        secret_params, input_data = valid_params, torch.zeros_like(inputs)
     elif protocol.player_id == 1:
         # load valid params, but we do not need the value, just replace weights with zeros
         # since player2 do not know any about model params
-        secret_params = {k: torch.zeros_like(v) for k, v in valid_params}
+        secret_params = {k: torch.zeros_like(v) for k, v in valid_params.items()}
         input_data = inputs
     elif protocol.player_id == 2:
         # load valid params, but we do not need the value, just replace weights with zeros
         # since player2 do not know any about model params
-        secret_params = {k: torch.zeros_like(v) for k, v in valid_params}
-        input_data = None
+        secret_params = {k: torch.zeros_like(v) for k, v in valid_params.items()}
+        input_data = torch.zeros_like(inputs)
     else:
         assert False, "unreachable"
 
@@ -191,10 +236,12 @@ def infer(inputs):
     del valid_params
 
     params_shared = {
-        k: protocol.input_share(v.numpy().flatten().tolist(), 0)
+        k: MatrixND(v.shape, protocol.input_share(v.numpy().flatten().tolist(), 0))
         for k, v in secret_params.items()
     }
-    X_shared = protocol.input_share(input_data, 1)
+    X_shared = MatrixND(
+        input_data.shape, protocol.input_share(input_data.flatten().tolist(), 1)
+    )
 
     # 模型前向传播推理
     outputs = lenet_forward(X_shared, params_shared, protocol)
