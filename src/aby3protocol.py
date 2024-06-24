@@ -738,6 +738,97 @@ class Aby3Protocol:
         ret_mat = Matrix(n, m, ret)
         return ret_mat
 
+    def xor_gate(self, lhs: list, rhs: list):
+        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        return [RSS3PC(lhs[i][0] ^ rhs[i][0], lhs[i][1] ^ rhs[i][1], modular=lhs[0].modular, binary=True) for i in range(len(lhs))]
+    
+    def and_gate(self, lhs: list, rhs: list):
+        
+        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
+
+        mod_bit = lhs[0].modular
+        ret = [RSS3PC(0, 0, modular=mod_bit, binary=True) for _ in lhs]
+
+        send_buffer = []
+
+        for i in range(len(lhs)):
+            ret[i][0] = (
+                (lhs[i][0] & rhs[i][0])
+                ^ (lhs[i][1] & rhs[i][0])
+                ^ (lhs[i][0] & rhs[i][1])
+                ^ self.PRNGs[0].randrange(mod_bit)
+                ^ self.PRNGs[1].randrange(mod_bit)
+            )
+
+            send_buffer.append(ret[i][0])
+        
+        recv_data = self.player.pass_around(send_buffer, -1)
+
+        for i in range(len(lhs)):
+            ret[i][1] = recv_data[i]
+        
+        return ret
+    
+    def or_gate(self, lhs: RSS3PC, rhs: RSS3PC):
+
+        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
+
+        return self.xor_gate(self.and_gate(lhs, rhs), self.xor_gate(lhs, rhs))
+
+    def adder(self, a, b, c):
+        sum = self.xor_gate(self.xor_gate(a, b), c)
+        carry = self.or_gate(self.and_gate(a, b), self.and_gate(c, self.xor_gate(a, b)))
+        return sum, carry
+    
+    def full_adder(self, a, b, bit_length):
+        sum = []
+        carry = [RSS3PC(0, 0, modular=a[0].modular)]
+        for i in range(bit_length):
+            sum_bit, carry = self.adder([a[i]], [b[i]], carry)
+            sum.append(sum_bit[0])
+        sum.append(carry[0])
+        return sum
+
+    def bit_decomposition(self, a: list):
+        nbits = a[0].modular
+        a0, a1, a2 = [], [], []
+
+        if self.player_id == 0:
+            for each in a:
+                a0.append(RSS3PC(each[0], 0, each.modular, True))
+                a1.append(RSS3PC(0, each[1], each.modular, True))
+                a2.append(RSS3PC(0, 0, each.modular, True))
+        elif self.player_id == 1:
+            for each in a:
+                a0.append(RSS3PC(0, 0, each.modular, True))
+                a1.append(RSS3PC(each[0], 0, each.modular, True))
+                a2.append(RSS3PC(0, each[1], each.modular, True))
+        else:
+            for each in a:
+                a0.append(RSS3PC(0, each[1], each.modular, True))
+                a1.append(RSS3PC(0, 0, each.modular, True))
+                a2.append(RSS3PC(each[0], 0, each.modular, True))
+        
+        a0_bits = []
+        a1_bits = []
+        a2_bits = []
+
+        for i in range(nbits):
+            a0_bits.append(RSS3PC(sum([((a0[j][0] >> i) & 1) * 2 ** j for j in range(len(a0))]), sum([((a0[j][1] >> i) & 1) * 2 ** j for j in range(len(a0))]), modular=len(a0)))
+            a1_bits.append(RSS3PC(sum([((a1[j][0] >> i) & 1) * 2 ** j for j in range(len(a1))]), sum([((a1[j][1] >> i) & 1) * 2 ** j for j in range(len(a1))]), modular=len(a0)))
+            a2_bits.append(RSS3PC(sum([((a2[j][0] >> i) & 1) * 2 ** j for j in range(len(a2))]), sum([((a2[j][1] >> i) & 1) * 2 ** j for j in range(len(a2))]), modular=len(a0)))
+        
+        result = self.full_adder(a0_bits, a1_bits, nbits)
+        result = self.full_adder(result, a2_bits, nbits)
+
+        ret = []
+        for i in range(len(a)):
+            ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, binary=True))
+
+        return ret
+
     def mat_div_sp(self, lhs: Matrix, rhs: int):
         raise NotImplementedError()  # TODO
 
