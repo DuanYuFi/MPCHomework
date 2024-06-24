@@ -14,11 +14,13 @@ class RSS3PC:
     data: list
     decimal: int
     modular: int
+    binary: bool
 
-    def __init__(self, s1, s2, modular=64, decimal=0):
+    def __init__(self, s1, s2, modular=64, decimal=0, binary=False):
         self.data = [s1, s2]
         self.decimal = decimal
         self.modular = modular
+        self.binary = binary
 
     def __getitem__(self, index):
         return self.data[index]
@@ -157,18 +159,42 @@ class Aby3Protocol:
         else:
             raise ValueError(f"Invalid type {type(shares[0])} for shares")
 
-    def input_share(self, public, owner: int):
-        if isinstance(public, Matrix):
-            return Matrix(
-                public.nrows, public.ncols, self.input_share(public.data, owner)
-            )
-
-        if all(isinstance(each_public, int) for each_public in public):
+    def input_share(self, public, owner: int, binary=False):
+        if isinstance(public , Matrix):
+            return Matrix(public.nrows, public.ncols, self.input_share(public.data, owner))
+        elif binary:
+            return self.input_share_b(public, owner)
+        elif all(isinstance(each_public, int) for each_public in public):
             return self.input_share_i(public, owner)
         elif any(isinstance(each_public, float) for each_public in public):
             return self.input_share_f(public, owner)
         else:
             raise ValueError(f"Invalid type {type(public[0])} for public value")
+
+    def input_share_b(self, public: int, owner: int):
+        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=True) for _ in range(len(public))]
+
+        if owner == self.player.player_id:
+            send_buffer = []
+            for i in range(len(public)):
+                r = self.PRNGs[0].randrange(self.modular)
+                ret[i][0] = r
+                ret[i][1] = public[i] ^ r
+                send_buffer.append(ret[i][1])
+            self.player.send(send_buffer, 1)
+
+        elif owner == (self.player.player_id - 1) % 3:
+            recv_data = self.player.recv(-1)
+            for i in range(len(public)):
+                ret[i][0] = recv_data[i]
+                ret[i][1] = 0
+
+        else:
+            for i in range(len(public)):
+                ret[i][0] = 0
+                ret[i][1] = self.PRNGs[1].randrange(self.modular)
+
+        return ret
 
     def input_share_i(self, public: int, owner: int):
         ret = [RSS3PC(0, 0, modular=self.modular_bit) for _ in range(len(public))]
@@ -211,10 +237,39 @@ class Aby3Protocol:
         if isinstance(secret, Matrix):
             return Matrix(secret.nrows, secret.ncols, self.reveal(secret.data, to))
 
+        if secret[0].binary:
+            return self.reveal_b(secret, to)
+
         if secret[0].decimal > 0:
             return self.reveal_f(secret, to)
         else:
             return self.reveal_i(secret, to)
+
+    def reveal_b(self, secret: list, to):
+        if to is None:
+            ret = [0 for _ in range(len(secret))]
+            send_buffer = []
+
+            for i in range(len(secret)):
+                ret[i] = secret[i][0] ^ secret[i][1]
+                send_buffer.append(secret[i][0])
+
+            recv_data = self.player.pass_around(send_buffer, 1)
+            for i in range(len(secret)):
+                ret[i] = ret[i] ^ recv_data[i]
+
+            return ret
+        else:
+            if to == (self.player_id + 1) % 3:
+                send_buffer = [secret[i][0] for i in range(len(secret))]
+                self.player.send(send_buffer, 1)
+            elif to == self.player_id:
+                recv = self.player.recv(-1)
+                ret = [
+                    secret[i][0] ^ secret[i][1] ^ recv[i]
+                    for i in range(len(secret))
+                ]
+                return ret
 
     def reveal_i(self, secret: list, to):
         if to is None:
@@ -275,7 +330,7 @@ class Aby3Protocol:
         mod_bit = shares[0].modular
         modular = 1 << mod_bit
 
-        ret = [RSS3PC(0, 0) for _ in range(len(shares))]
+        ret = [RSS3PC(0, 0, modular=mod_bit) for _ in range(len(shares))]
         if self.player_id == 0:
             for i in range(len(shares)):
                 ret[i][0] = arithmetic_shift_right(shares[i][0], shift, mod_bit)
@@ -408,7 +463,10 @@ class Aby3Protocol:
         modular = 1 << mod_bit
 
         return [
-            RSS3PC((_lhs[0] + _rhs[0]) % modular, (_lhs[1] + _rhs[1]) % modular)
+            RSS3PC(
+                (_lhs[0] + _rhs[0]) % modular, (_lhs[1] + _rhs[1]) % modular,
+                modular=mod_bit
+            )
             for _lhs, _rhs in zip(lhs, rhs)
         ]
 
@@ -428,7 +486,7 @@ class Aby3Protocol:
         if isinstance(rhs[0], float):
             rhs = [round(each * 2**self.demical) for each in rhs]
 
-        ret = [RSS3PC(lhs[i][0], lhs[i][1]) for i in range(len(lhs))]
+        ret = [RSS3PC(lhs[i][0], lhs[i][1], modular=mod_bit) for i in range(len(lhs))]
         if self.player_id == 0:
             for i in range(len(lhs)):
                 ret[i][1] = (ret[i][1] + rhs[i]) % modular
@@ -437,7 +495,23 @@ class Aby3Protocol:
                 ret[i][0] = (ret[i][0] + rhs[i]) % modular
 
         return ret
+    
+    def neg(self, lhs):
+        if isinstance(lhs, Matrix):
+            return Matrix(lhs.nrows, lhs.ncols, self.neg(lhs.data))
+        
+        return self.mul(lhs, [-1] * len(lhs))
+    
+    def sub(self, lhs, rhs):
+        return self.add(lhs, self.neg(rhs))
+    
+    def sub_pp(self, lhs, rhs):
+        """
+        Subtract two public values
+        """
 
+        return [lhs[i] - rhs[i] for i in range(len(lhs))]
+    
     def mul(self, lhs, rhs):
         return self.binary_wrapper("mul", lhs, rhs)
 
@@ -459,7 +533,7 @@ class Aby3Protocol:
         mod_bit = lhs[0].modular
         modular = 1 << mod_bit
 
-        ret = [RSS3PC(0, 0) for _ in lhs]
+        ret = [RSS3PC(0, 0, modular=mod_bit) for _ in lhs]
         send_buffer = []
 
         for i in range(len(lhs)):
@@ -496,7 +570,10 @@ class Aby3Protocol:
             rhs = [round(each * 2**self.demical) for each in rhs]
 
         return [
-            RSS3PC((lhs[i][0] * rhs[i]) % modular, (lhs[i][1] * rhs[i]) % modular)
+            RSS3PC(
+                (lhs[i][0] * rhs[i]) % modular, (lhs[i][1] * rhs[i]) % modular, 
+                modular=mod_bit
+            )
             for i in range(len(lhs))
         ]
 
@@ -661,7 +738,7 @@ class Aby3Protocol:
         ret_mat = Matrix(n, m, ret)
         return ret_mat
 
-    def div_sp(self, lhs, rhs: int):
+    def mat_div_sp(self, lhs: Matrix, rhs: int):
         raise NotImplementedError()  # TODO
 
     def max_sp(self, lhs, rhs: int):

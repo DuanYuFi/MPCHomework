@@ -25,6 +25,7 @@ def run_test(test_name, lhs, rhs):
 
 run_test("add", input_i, input_f)
 run_test("mul", input_i, input_f)
+run_test("sub", input_i, input_f)
 run_test("mat_mul", Matrix(2, 2, input_i), Matrix(2, 2, input_f))
 
 protocol.disconnect()
