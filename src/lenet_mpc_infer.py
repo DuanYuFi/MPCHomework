@@ -126,6 +126,7 @@ def flatten(X: MatrixND) -> MatrixND:
 
 
 # 全连接层
+# TODO: 代码写完但还没调试
 def dense(
     X: MatrixND, W: MatrixND, b: MatrixND, protocol: Aby3Protocol = None
 ) -> MatrixND:

@@ -1027,13 +1027,12 @@ class Aby3Protocol:
     def div_sp(self, lhs: list, rhs: int):
         """
         Tricky implementation
+        TODO
         """
 
-        result = self.reveal(lhs, 0)
-        if result:
-            result = [each / rhs for each in result]
-            return self.input_share(result, 0)
-        return lhs
+        result = self.reveal(lhs)
+        result = [each / rhs for each in result]
+        return self.input_share(result, 0)
 
     def mat_max_sp(self, lhs, rhs: int):
         return Matrix(
