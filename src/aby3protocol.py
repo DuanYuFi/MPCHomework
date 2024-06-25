@@ -263,7 +263,7 @@ class Aby3Protocol:
         return ret
 
 
-    def reveal(self, secret: list, to=None, sign=True):
+    def reveal(self, secret, to=None, sign=True):
         """
         Reveal secret shared values
         """
@@ -889,10 +889,10 @@ class Aby3Protocol:
         i.e. return bits in arithmetic share.
         """
 
-        ret = [RSS3PC(0, 0, modular=self.modular, binary=False) for _ in bits]
+        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=False) for _ in bits]
 
         if self.player_id == 0:
-            c1 = [self.PRNGs[0].randrange(self.modular_bit) for _ in bits]
+            c1 = [self.PRNGs[0].randrange(self.modular) for _ in bits]
             choices = [bit[1] for bit in bits]
             self.ot_for_bi.choice(choices)
             c2 = self.player.recv(1)
@@ -902,7 +902,7 @@ class Aby3Protocol:
                 ret[i][1] = c2[i]
         
         elif self.player_id == 1:
-            c3 = [self.PRNGs[1].randrange(self.modular_bit) for _ in bits]
+            c3 = [self.PRNGs[1].randrange(self.modular) for _ in bits]
             c2 = self.ot_for_bi.receive()
             self.player.send(c2, -1)
 
@@ -911,8 +911,8 @@ class Aby3Protocol:
                 ret[i][1] = c3[i]
 
         else:
-            c1 = [self.PRNGs[1].randrange(self.modular_bit) for _ in bits]
-            c3 = [self.PRNGs[0].randrange(self.modular_bit) for _ in bits]
+            c1 = [self.PRNGs[1].randrange(self.modular) for _ in bits]
+            c3 = [self.PRNGs[0].randrange(self.modular) for _ in bits]
 
             M1 = []
             M2 = []
@@ -952,16 +952,26 @@ class Aby3Protocol:
         
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         return self.ltz(self.sub(lhs, rhs))
-        
+    
+    def max(self, lhs, rhs):
+        smaller = self.compare(lhs, rhs)
+        return self.add(self.mul(smaller, self.sub(rhs, lhs)), lhs)
 
     def mat_div_sp(self, lhs: Matrix, rhs: int):
-        raise NotImplementedError()  # TODO
+        """
+        Tricky implementation
+        """
+
+        result = self.reveal(lhs, 0)
+        result = Matrix(result.nrows, result.ncols, [each / rhs for each in result.data])
+        return self.input_share(result, 0)
+
 
     def max_sp(self, lhs, rhs: int):
-        raise NotImplementedError()  # TODO
+        return Matrix(lhs.nrows, lhs.ncols, self.max(lhs.data, [rhs] * lhs.nrows * lhs.ncols))
 
     def mat_ltz(self, lhs: Matrix):
-        raise NotImplementedError()  # TODO
+        return Matrix(lhs.nrows, lhs.ncols, self.ltz(lhs.data))
 
 
 if __name__ == "__main__":
