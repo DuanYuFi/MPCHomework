@@ -115,6 +115,12 @@ class Player:
 
         data = pickle.dumps(data)
         data = int.to_bytes(len(data), 4, "big") + data
+
+        if player_offset == -2:
+            player_offset = 1
+        elif player_offset == 2:
+            player_offset = -1
+
         player_idx = (player_offset + 1) >> 1
         self.parties[player_idx].send(data)
 
@@ -147,6 +153,11 @@ class Player:
     def recv(self, player_offset):
         # player_offset = -1 means recv from previous player
         # player_offset = 1 means recv from next player
+
+        if player_offset == -2:
+            player_offset = 1
+        elif player_offset == 2:
+            player_offset = -1
 
         player_idx = (player_offset + 1) >> 1
         size = int.from_bytes(self._recvall(player_idx, 4), "big")

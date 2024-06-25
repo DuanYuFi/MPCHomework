@@ -1,6 +1,7 @@
 import random
 
 from network import Player
+from OT import OT3
 
 
 def arithmetic_shift_right(x, offset, nbits=64):
@@ -111,6 +112,7 @@ class Aby3Protocol:
     player: Player
     PRNGs: list
     modular: int
+    ot_for_bi: OT3  # ot for bit injection in ABY3
 
     def __init__(
         self, player_id, modular_bit=64, demical_bit=20, port_base=None, debug=False
@@ -126,6 +128,8 @@ class Aby3Protocol:
         self.player_id = player_id
         self.demical = demical_bit
         self.modular_bit = modular_bit
+
+        self.ot_for_bi = OT3(2, 1, 0, player_id, self)
 
     def disconnect(self):
         self.player.disconnect()
@@ -147,13 +151,15 @@ class Aby3Protocol:
         if isinstance(shares, Matrix):
             shares = shares[0]
 
-        if isinstance(shares[0], RSS3PC):
+        if isinstance(shares[0], int):
+            return False, False
+        
+        elif isinstance(shares[0], RSS3PC):
             if shares[0].decimal > 0:
                 return True, True
             else:
                 return True, False
-        elif isinstance(shares[0], int):
-            return False, False
+
         elif isinstance(shares[0], float):
             return False, True
         else:
@@ -257,7 +263,7 @@ class Aby3Protocol:
         return ret
 
 
-    def reveal(self, secret: list, to=None):
+    def reveal(self, secret: list, to=None, sign=True):
         """
         Reveal secret shared values
         """
@@ -266,14 +272,14 @@ class Aby3Protocol:
             return Matrix(secret.nrows, secret.ncols, self.reveal(secret.data, to))
 
         if secret[0].binary:
-            return self.reveal_b(secret, to)
+            return self.reveal_b(secret, to, sign)
 
         if secret[0].decimal > 0:
-            return self.reveal_f(secret, to)
+            return self.reveal_f(secret, to, sign)
         else:
-            return self.reveal_i(secret, to)
+            return self.reveal_i(secret, to, sign)
 
-    def reveal_b(self, secret: list, to):
+    def reveal_b(self, secret: list, to, sign):
         if to is None:
             ret = [0 for _ in range(len(secret))]
             send_buffer = []
@@ -286,7 +292,8 @@ class Aby3Protocol:
             for i in range(len(secret)):
                 ret[i] = ret[i] ^ recv_data[i]
             
-            ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+            if sign:
+                ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
             if secret[0].decimal > 0:
                 for i in range(len(ret)):
                     ret[i] /= 2 ** secret[i].decimal
@@ -302,16 +309,18 @@ class Aby3Protocol:
                     secret[i][0] ^ secret[i][1] ^ recv[i]
                     for i in range(len(secret))
                 ]
-                ret = [
-                    each if each < self.modular // 2 else each - self.modular
-                    for each in ret
-                ]
+
+                if sign:
+                    ret = [
+                        each if each < self.modular // 2 else each - self.modular
+                        for each in ret
+                    ]
                 if secret[0].decimal > 0:
                     for i in range(len(ret)):
                         ret[i] /= 2 ** secret[i].decimal
                 return ret
 
-    def reveal_i(self, secret: list, to):
+    def reveal_i(self, secret: list, to, sign):
         if to is None:
             ret = [0 for _ in range(len(secret))]
             send_buffer = []
@@ -324,10 +333,11 @@ class Aby3Protocol:
             for i in range(len(secret)):
                 ret[i] = (ret[i] + recv_data[i]) % self.modular
 
-            ret = [
-                each if each < self.modular // 2 else each - self.modular
-                for each in ret
-            ]
+            if sign:
+                ret = [
+                    each if each < self.modular // 2 else each - self.modular
+                    for each in ret
+                ]
             return ret
         else:
             if to == (self.player_id + 1) % 3:
@@ -339,14 +349,15 @@ class Aby3Protocol:
                     (secret[i][0] + secret[i][1] + recv[i]) % self.modular
                     for i in range(len(secret))
                 ]
-                ret = [
-                    each if each < self.modular // 2 else each - self.modular
-                    for each in ret
-                ]
+                if sign:
+                    ret = [
+                        each if each < self.modular // 2 else each - self.modular
+                        for each in ret
+                    ]
                 return ret
 
-    def reveal_f(self, secret: list, to):
-        ret = self.reveal_i(secret, to)
+    def reveal_f(self, secret: list, to, sign):
+        ret = self.reveal_i(secret, to, sign)
         if to is None or to == self.player_id:
             for i in range(len(ret)):
                 ret[i] /= 2 ** secret[i].decimal
@@ -869,6 +880,66 @@ class Aby3Protocol:
             ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, decimal=decimal, binary=True))
 
         return ret
+    
+    def bit_injection(self, bits: list):
+        """
+        bits: list of RSS3PC with binary=True, with value in {0, 1}
+        returns: list of RSS3PC with binary=False, with value corresponding to bits
+
+        i.e. return bits in arithmetic share.
+        """
+
+        ret = [RSS3PC(0, 0, modular=self.modular, binary=False) for _ in bits]
+
+        if self.player_id == 0:
+            c1 = [self.PRNGs[0].randrange(self.modular_bit) for _ in bits]
+            choices = [bit[1] for bit in bits]
+            self.ot_for_bi.choice(choices)
+            c2 = self.player.recv(1)
+
+            for i in range(len(bits)):
+                ret[i][0] = c1[i]
+                ret[i][1] = c2[i]
+        
+        elif self.player_id == 1:
+            c3 = [self.PRNGs[1].randrange(self.modular_bit) for _ in bits]
+            c2 = self.ot_for_bi.receive()
+            self.player.send(c2, -1)
+
+            for i in range(len(bits)):
+                ret[i][0] = c2[i]
+                ret[i][1] = c3[i]
+
+        else:
+            c1 = [self.PRNGs[1].randrange(self.modular_bit) for _ in bits]
+            c3 = [self.PRNGs[0].randrange(self.modular_bit) for _ in bits]
+
+            M1 = []
+            M2 = []
+
+            for i in range(len(bits)):
+                m1 = ((0 ^ bits[i][0] ^ bits[i][1]) - c1[i] - c3[i]) % self.modular
+                m2 = ((1 ^ bits[i][0] ^ bits[i][1]) - c1[i] - c3[i]) % self.modular
+                M1.append(m1)
+                M2.append(m2)
+
+            self.ot_for_bi.send(M1, M2)
+
+            for i in range(len(bits)):
+                ret[i][0] = c3[i]
+                ret[i][1] = c1[i]
+
+        return ret
+        
+    def ltz(self, values: list):
+        mod_bit = values[0].modular
+        decompositions = self.bit_decomposition(values)
+        msb = []
+        for each in decompositions:
+            msb.append(RSS3PC((each[0] >> (mod_bit - 1)) & 1, (each[1] >> (mod_bit - 1)) & 1))
+        
+        msb = self.bit_injection(msb)
+        return msb
 
     def mat_div_sp(self, lhs: Matrix, rhs: int):
         raise NotImplementedError()  # TODO
