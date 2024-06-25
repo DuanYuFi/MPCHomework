@@ -153,7 +153,7 @@ class Aby3Protocol:
 
         if isinstance(shares[0], int):
             return False, False
-        
+
         elif isinstance(shares[0], RSS3PC):
             if shares[0].decimal > 0:
                 return True, True
@@ -166,8 +166,10 @@ class Aby3Protocol:
             raise ValueError(f"Invalid type {type(shares[0])} for shares")
 
     def input_share(self, public, owner: int, binary=False):
-        if isinstance(public , Matrix):
-            return Matrix(public.nrows, public.ncols, self.input_share(public.data, owner))
+        if isinstance(public, Matrix):
+            return Matrix(
+                public.nrows, public.ncols, self.input_share(public.data, owner)
+            )
         elif binary:
             return self.input_share_b(public, owner)
         elif all(isinstance(each_public, int) for each_public in public):
@@ -178,7 +180,10 @@ class Aby3Protocol:
             raise ValueError(f"Invalid type {type(public[0])} for public value")
 
     def input_share_b(self, public: int, owner: int):
-        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=True) for _ in range(len(public))]
+        ret = [
+            RSS3PC(0, 0, modular=self.modular_bit, binary=True)
+            for _ in range(len(public))
+        ]
 
         if owner == self.player.player_id:
             send_buffer = []
@@ -234,34 +239,39 @@ class Aby3Protocol:
         for i in range(len(ret)):
             ret[i].set_decimal(self.demical)
         return ret
-    
+
     def random_shares(self, length, binary=False):
-        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)]
+        ret = [
+            RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)
+        ]
         for i in range(length):
             ret[i][0] = self.PRNGs[0].randrange(self.modular)
             ret[i][1] = self.PRNGs[1].randrange(self.modular)
-        
+
         return ret
-    
+
     def zero_shares(self, length, binary=False):
-        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)]
+        ret = [
+            RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)
+        ]
         buffer = []
         for i in range(length):
             ret[i][0] = self.PRNGs[0].randrange(self.modular)
             if binary:
                 ret[i][0] ^= self.PRNGs[1].randrange(self.modular)
             else:
-                ret[i][0] = (ret[i][0] - self.PRNGs[1].randrange(self.modular)) % self.modular
-            
+                ret[i][0] = (
+                    ret[i][0] - self.PRNGs[1].randrange(self.modular)
+                ) % self.modular
+
             buffer.append(ret[i][0])
-        
+
         recv = self.player.pass_around(buffer, -1)
 
         for i in range(length):
             ret[i][1] = recv[i]
-        
-        return ret
 
+        return ret
 
     def reveal(self, secret, to=None, sign=True):
         """
@@ -291,13 +301,16 @@ class Aby3Protocol:
             recv_data = self.player.pass_around(send_buffer, 1)
             for i in range(len(secret)):
                 ret[i] = ret[i] ^ recv_data[i]
-            
+
             if sign:
-                ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+                ret = [
+                    each if each < self.modular // 2 else each - self.modular
+                    for each in ret
+                ]
             if secret[0].decimal > 0:
                 for i in range(len(ret)):
                     ret[i] /= 2 ** secret[i].decimal
-            
+
             return ret
         else:
             if to == (self.player_id + 1) % 3:
@@ -306,8 +319,7 @@ class Aby3Protocol:
             elif to == self.player_id:
                 recv = self.player.recv(-1)
                 ret = [
-                    secret[i][0] ^ secret[i][1] ^ recv[i]
-                    for i in range(len(secret))
+                    secret[i][0] ^ secret[i][1] ^ recv[i] for i in range(len(secret))
                 ]
 
                 if sign:
@@ -515,8 +527,9 @@ class Aby3Protocol:
 
         return [
             RSS3PC(
-                (_lhs[0] + _rhs[0]) % modular, (_lhs[1] + _rhs[1]) % modular,
-                modular=mod_bit
+                (_lhs[0] + _rhs[0]) % modular,
+                (_lhs[1] + _rhs[1]) % modular,
+                modular=mod_bit,
             )
             for _lhs, _rhs in zip(lhs, rhs)
         ]
@@ -546,23 +559,23 @@ class Aby3Protocol:
                 ret[i][0] = (ret[i][0] + rhs[i]) % modular
 
         return ret
-    
+
     def neg(self, lhs):
         if isinstance(lhs, Matrix):
             return Matrix(lhs.nrows, lhs.ncols, self.neg(lhs.data))
-        
+
         return self.mul(lhs, [-1] * len(lhs))
-    
+
     def sub(self, lhs, rhs):
         return self.add(lhs, self.neg(rhs))
-    
+
     def sub_pp(self, lhs, rhs):
         """
         Subtract two public values
         """
 
         return [lhs[i] - rhs[i] for i in range(len(lhs))]
-    
+
     def mul(self, lhs, rhs):
         return self.binary_wrapper("mul", lhs, rhs)
 
@@ -622,8 +635,9 @@ class Aby3Protocol:
 
         return [
             RSS3PC(
-                (lhs[i][0] * rhs[i]) % modular, (lhs[i][1] * rhs[i]) % modular, 
-                modular=mod_bit
+                (lhs[i][0] * rhs[i]) % modular,
+                (lhs[i][1] * rhs[i]) % modular,
+                modular=mod_bit,
             )
             for i in range(len(lhs))
         ]
@@ -791,10 +805,18 @@ class Aby3Protocol:
 
     def xor_gate(self, lhs: list, rhs: list):
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
-        return [RSS3PC(lhs[i][0] ^ rhs[i][0], lhs[i][1] ^ rhs[i][1], modular=lhs[0].modular, binary=True) for i in range(len(lhs))]
-    
+        return [
+            RSS3PC(
+                lhs[i][0] ^ rhs[i][0],
+                lhs[i][1] ^ rhs[i][1],
+                modular=lhs[0].modular,
+                binary=True,
+            )
+            for i in range(len(lhs))
+        ]
+
     def and_gate(self, lhs: list, rhs: list):
-        
+
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
 
@@ -813,14 +835,14 @@ class Aby3Protocol:
             )
 
             send_buffer.append(ret[i][0])
-        
+
         recv_data = self.player.pass_around(send_buffer, -1)
 
         for i in range(len(lhs)):
             ret[i][1] = recv_data[i]
-        
+
         return ret
-    
+
     def or_gate(self, lhs: RSS3PC, rhs: RSS3PC):
 
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
@@ -832,7 +854,7 @@ class Aby3Protocol:
         sum = self.xor_gate(self.xor_gate(a, b), c)
         carry = self.or_gate(self.and_gate(a, b), self.and_gate(c, self.xor_gate(a, b)))
         return sum, carry
-    
+
     def full_adder(self, a, b, bit_length):
         sum = []
         carry = [RSS3PC(0, 0, modular=a[0].modular)]
@@ -862,25 +884,51 @@ class Aby3Protocol:
                 a0.append(RSS3PC(0, each[1], each.modular, True))
                 a1.append(RSS3PC(0, 0, each.modular, True))
                 a2.append(RSS3PC(each[0], 0, each.modular, True))
-        
+
         a0_bits = []
         a1_bits = []
         a2_bits = []
 
         for i in range(nbits):
-            a0_bits.append(RSS3PC(sum([((a0[j][0] >> i) & 1) * 2 ** j for j in range(len(a0))]), sum([((a0[j][1] >> i) & 1) * 2 ** j for j in range(len(a0))]), modular=len(a0)))
-            a1_bits.append(RSS3PC(sum([((a1[j][0] >> i) & 1) * 2 ** j for j in range(len(a1))]), sum([((a1[j][1] >> i) & 1) * 2 ** j for j in range(len(a1))]), modular=len(a0)))
-            a2_bits.append(RSS3PC(sum([((a2[j][0] >> i) & 1) * 2 ** j for j in range(len(a2))]), sum([((a2[j][1] >> i) & 1) * 2 ** j for j in range(len(a2))]), modular=len(a0)))
-        
+            a0_bits.append(
+                RSS3PC(
+                    sum([((a0[j][0] >> i) & 1) * 2**j for j in range(len(a0))]),
+                    sum([((a0[j][1] >> i) & 1) * 2**j for j in range(len(a0))]),
+                    modular=len(a0),
+                )
+            )
+            a1_bits.append(
+                RSS3PC(
+                    sum([((a1[j][0] >> i) & 1) * 2**j for j in range(len(a1))]),
+                    sum([((a1[j][1] >> i) & 1) * 2**j for j in range(len(a1))]),
+                    modular=len(a0),
+                )
+            )
+            a2_bits.append(
+                RSS3PC(
+                    sum([((a2[j][0] >> i) & 1) * 2**j for j in range(len(a2))]),
+                    sum([((a2[j][1] >> i) & 1) * 2**j for j in range(len(a2))]),
+                    modular=len(a0),
+                )
+            )
+
         result = self.full_adder(a0_bits, a1_bits, nbits)
         result = self.full_adder(result, a2_bits, nbits)
 
         ret = []
         for i in range(len(a)):
-            ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, decimal=decimal, binary=True))
+            ret.append(
+                RSS3PC(
+                    sum([((result[j][0] >> i) & 1) * 2**j for j in range(len(result))]),
+                    sum([((result[j][1] >> i) & 1) * 2**j for j in range(len(result))]),
+                    modular=nbits,
+                    decimal=decimal,
+                    binary=True,
+                )
+            )
 
         return ret
-    
+
     def bit_injection(self, bits: list):
         """
         bits: list of RSS3PC with binary=True, with value in {0, 1}
@@ -900,7 +948,7 @@ class Aby3Protocol:
             for i in range(len(bits)):
                 ret[i][0] = c1[i]
                 ret[i][1] = c2[i]
-        
+
         elif self.player_id == 1:
             c3 = [self.PRNGs[1].randrange(self.modular) for _ in bits]
             c2 = self.ot_for_bi.receive()
@@ -930,7 +978,7 @@ class Aby3Protocol:
                 ret[i][1] = c1[i]
 
         return ret
-        
+
     def ltz(self, values: list):
 
         if type(values[0]) in [int, float]:
@@ -940,20 +988,22 @@ class Aby3Protocol:
         decompositions = self.bit_decomposition(values)
         msb = []
         for each in decompositions:
-            msb.append(RSS3PC((each[0] >> (mod_bit - 1)) & 1, (each[1] >> (mod_bit - 1)) & 1))
-        
+            msb.append(
+                RSS3PC((each[0] >> (mod_bit - 1)) & 1, (each[1] >> (mod_bit - 1)) & 1)
+            )
+
         msb = self.bit_injection(msb)
         return msb
-    
+
     def compare(self, lhs: list, rhs: list):
         """
         return 1 if lhs < rhs, 0 otherwise, in arithmetic ss.
         """
-        
+
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         return self.ltz(self.sub(lhs, rhs))
-    
-    def max(self, lhs, rhs):
+
+    def max_sp(self, lhs, rhs):
         smaller = self.compare(lhs, rhs)
         return self.add(self.mul(smaller, self.sub(rhs, lhs)), lhs)
 
@@ -963,12 +1013,15 @@ class Aby3Protocol:
         """
 
         result = self.reveal(lhs, 0)
-        result = Matrix(result.nrows, result.ncols, [each / rhs for each in result.data])
+        result = Matrix(
+            result.nrows, result.ncols, [each / rhs for each in result.data]
+        )
         return self.input_share(result, 0)
 
-
-    def max_sp(self, lhs, rhs: int):
-        return Matrix(lhs.nrows, lhs.ncols, self.max(lhs.data, [rhs] * lhs.nrows * lhs.ncols))
+    def mat_max_sp(self, lhs, rhs: int):
+        return Matrix(
+            lhs.nrows, lhs.ncols, self.max_sp(lhs.data, [rhs] * lhs.nrows * lhs.ncols)
+        )
 
     def mat_ltz(self, lhs: Matrix):
         return Matrix(lhs.nrows, lhs.ncols, self.ltz(lhs.data))
