@@ -10,7 +10,7 @@ from tqdm import tqdm
 from aby3protocol import Aby3Protocol, Matrix
 
 cur_dir = os.path.dirname(__file__)
-out_dir = os.path.join(cur_dir, "lenet_outdir")
+out_dir = os.path.join(cur_dir, "..", "output")
 
 
 class MatrixND(np.ndarray):

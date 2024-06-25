@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 # 设置输出目录
 cur_dir = os.path.dirname(__file__)
-out_dir = os.path.join(cur_dir, "lenet_outdir")
+out_dir = os.path.join(cur_dir, "..", "output")
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 

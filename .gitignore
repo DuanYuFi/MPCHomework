@@ -2,5 +2,5 @@ debug/
 __pycache__/
 *.log
 venv/
-lenet_outdir/
+output/
 .vscode/

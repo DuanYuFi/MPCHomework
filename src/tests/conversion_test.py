@@ -1,5 +1,8 @@
+import os
 import sys
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, ".."))
 from aby3protocol import *
 
 player_id = int(sys.argv[1])
@@ -11,10 +14,14 @@ shares = []
 for i in range(3):
     shares.append(protocol.input_share([numbers[i]], i, True)[0])
 
+
 def full_adder(a, b, c):
     sum = protocol.xor_gate(protocol.xor_gate(a, b), c)
-    carry = protocol.or_gate(protocol.and_gate(a, b), protocol.and_gate(c, protocol.xor_gate(a, b)))
+    carry = protocol.or_gate(
+        protocol.and_gate(a, b), protocol.and_gate(c, protocol.xor_gate(a, b))
+    )
     return sum, carry
+
 
 def add(a, b, bit_length):
     sum = []
@@ -24,6 +31,7 @@ def add(a, b, bit_length):
         sum.append(sum_bit[0])
     # sum.append(carry[0])
     return sum
+
 
 a, b, c = shares
 

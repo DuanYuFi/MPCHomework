@@ -1,20 +1,25 @@
+import os
 import sys
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(current_dir, ".."))
 from aby3protocol import *
 
 player_id = int(sys.argv[1])
 protocol = Aby3Protocol(player_id, port_base=23333)
 
-input = [-4.67372434614279,
-        91.7779206453715,
-        -36.5414413166793,
-        91.0786324224954,
-        -50.0387628740142,
-        39.8330898243399,
-        -34.8634377329487,
-        99.9197975054495,
-        65.4276636868028,
-        13.9880638134373]
+input = [
+    -4.67372434614279,
+    91.7779206453715,
+    -36.5414413166793,
+    91.0786324224954,
+    -50.0387628740142,
+    39.8330898243399,
+    -34.8634377329487,
+    99.9197975054495,
+    65.4276636868028,
+    13.9880638134373,
+]
 
 # input = [int(each) for each in input]
 # input = [round(each * 2 ** 20) for each in input]
