@@ -11,15 +11,10 @@ input_f = [8.71828, 1.12345, -2.675654, -9.75645]
 a = protocol.input_share(input_i, 0)
 b = protocol.input_share(input_f, 0)
 
-c = protocol.sub(a, b)
-for i in range(len(c)):
-    c[i].set_decimal(0)
+c = protocol.compare(a, b)
 
-d = protocol.shift_right(c, 23)
+result = protocol.reveal(c, to=0)
 
-result = protocol.reveal(d, to=0)
-
-if player_id == 0:
-    print(result)
+print(result)
 
 protocol.disconnect()

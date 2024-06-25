@@ -932,6 +932,10 @@ class Aby3Protocol:
         return ret
         
     def ltz(self, values: list):
+
+        if type(values[0]) in [int, float]:
+            return [1 if each < 0 else 0 for each in values]
+
         mod_bit = values[0].modular
         decompositions = self.bit_decomposition(values)
         msb = []
@@ -940,6 +944,15 @@ class Aby3Protocol:
         
         msb = self.bit_injection(msb)
         return msb
+    
+    def compare(self, lhs: list, rhs: list):
+        """
+        return 1 if lhs < rhs, 0 otherwise, in arithmetic ss.
+        """
+        
+        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        return self.ltz(self.sub(lhs, rhs))
+        
 
     def mat_div_sp(self, lhs: Matrix, rhs: int):
         raise NotImplementedError()  # TODO
