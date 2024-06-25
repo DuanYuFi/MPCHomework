@@ -1,5 +1,12 @@
 
 class OT3:
+    """
+    A simple three party OT protocol.
+
+    Reference: ABY3: A Mixed Protocol Framework for Machine Learning,
+        Section 5.4.1, Three-Party OT.
+    """
+
     sender: int
     receiver: int
     helper: int
