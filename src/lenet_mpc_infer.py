@@ -43,6 +43,8 @@ def conv2d(
     padding: int = 0,
     protocol: Aby3Protocol = None,
 ) -> MatrixND:
+    return X
+
     (n_H_prev, n_W_prev) = X.shape[1:3]
     (f, _, n_C_prev, n_C) = W.shape
     n_H = int((n_H_prev - f + 2 * padding) / stride) + 1
@@ -123,10 +125,7 @@ def avg_pool(
 # ReLU 激活函数
 def relu(X: MatrixND, protocol: Aby3Protocol = None) -> MatrixND:
     zero_matrix = np.zeros(X.shape, dtype=object)
-    relu_output = np.empty(X.shape, dtype=object)
-
-    for idx, _ in np.ndenumerate(X.data):
-        relu_output[idx] = protocol.max_sp(X[idx], zero_matrix[idx])
+    relu_output = protocol.max_sp(X.flatten().tolist(), zero_matrix.flatten().tolist())
 
     return MatrixND(X.shape, relu_output)
 
