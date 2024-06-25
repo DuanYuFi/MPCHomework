@@ -228,6 +228,34 @@ class Aby3Protocol:
         for i in range(len(ret)):
             ret[i].set_decimal(self.demical)
         return ret
+    
+    def random_shares(self, length, binary=False):
+        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)]
+        for i in range(length):
+            ret[i][0] = self.PRNGs[0].randrange(self.modular)
+            ret[i][1] = self.PRNGs[1].randrange(self.modular)
+        
+        return ret
+    
+    def zero_shares(self, length, binary=False):
+        ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)]
+        buffer = []
+        for i in range(length):
+            ret[i][0] = self.PRNGs[0].randrange(self.modular)
+            if binary:
+                ret[i][0] ^= self.PRNGs[1].randrange(self.modular)
+            else:
+                ret[i][0] = (ret[i][0] - self.PRNGs[1].randrange(self.modular)) % self.modular
+            
+            buffer.append(ret[i][0])
+        
+        recv = self.player.pass_around(buffer, -1)
+
+        for i in range(length):
+            ret[i][1] = recv[i]
+        
+        return ret
+
 
     def reveal(self, secret: list, to=None):
         """
@@ -257,7 +285,12 @@ class Aby3Protocol:
             recv_data = self.player.pass_around(send_buffer, 1)
             for i in range(len(secret)):
                 ret[i] = ret[i] ^ recv_data[i]
-
+            
+            ret = [each if each < self.modular // 2 else each - self.modular for each in ret]
+            if secret[0].decimal > 0:
+                for i in range(len(ret)):
+                    ret[i] /= 2 ** secret[i].decimal
+            
             return ret
         else:
             if to == (self.player_id + 1) % 3:
@@ -269,6 +302,13 @@ class Aby3Protocol:
                     secret[i][0] ^ secret[i][1] ^ recv[i]
                     for i in range(len(secret))
                 ]
+                ret = [
+                    each if each < self.modular // 2 else each - self.modular
+                    for each in ret
+                ]
+                if secret[0].decimal > 0:
+                    for i in range(len(ret)):
+                        ret[i] /= 2 ** secret[i].decimal
                 return ret
 
     def reveal_i(self, secret: list, to):
@@ -357,7 +397,7 @@ class Aby3Protocol:
             rs = [self.PRNGs[0].randrange(modular) for _ in range(len(shares))]
             for i in range(len(shares)):
                 ret[i][0] = rs[i]
-                ret[i][1] = arithmetic_shift_right(shares[i][0], shift, mod_bit)
+                ret[i][1] = arithmetic_shift_right(shares[i][1], shift, mod_bit)
 
         return ret
 
@@ -793,6 +833,7 @@ class Aby3Protocol:
 
     def bit_decomposition(self, a: list):
         nbits = a[0].modular
+        decimal = a[0].decimal
         a0, a1, a2 = [], [], []
 
         if self.player_id == 0:
@@ -825,7 +866,7 @@ class Aby3Protocol:
 
         ret = []
         for i in range(len(a)):
-            ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, binary=True))
+            ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, decimal=decimal, binary=True))
 
         return ret
 

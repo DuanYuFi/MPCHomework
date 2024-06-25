@@ -12,20 +12,18 @@ input_f = [2.7182818284590452353, -3.1415926535897932384, 25.132741228718, -1e-6
 share_i = protocol.input_share(input_i, 0)
 share_f = protocol.input_share(input_f, 0)
 
-print("input ok")
+# print("input ok")
 
 # reveal
 
-reveal_i = protocol.reveal(share_i, to=0)
+reveal_i = protocol.reveal(share_i)
 
-if player_id == 0:
-    print(reveal_i)
+print(reveal_i)
 
 # print(share_f[i][0].decimal)
 
-reveal_f = protocol.reveal(share_f, to=0)
+reveal_f = protocol.reveal(share_f)
 
-if player_id == 0:
-    print(reveal_f)
+print(reveal_f)
 
 protocol.disconnect()

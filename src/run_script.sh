@@ -14,11 +14,11 @@ python "$1" 0 &
 PID0=$!
 
 # 启动 python $1 1 并获取其进程ID
-python "$1" 1 > /dev/null 2>&1 &
+python "$1" 1 > player_1.log 2>&1 &
 PID1=$!
 
 # 启动 python $1 2 并获取其进程ID
-python "$1" 2 > /dev/null 2>&1 &
+python "$1" 2 > player_2.log 2>&1 &
 PID2=$!
 
 # 等待所有进程结束
