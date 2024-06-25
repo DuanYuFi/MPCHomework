@@ -5,6 +5,17 @@ from OT import OT3
 
 
 def arithmetic_shift_right(x, offset, nbits=64):
+    """
+    Performs an arithmetic right shift on the given value `x` by the specified `offset` number of bits.
+
+    Args:
+        x (int): The value to be shifted.
+        offset (int): The number of bits to shift `x` to the right.
+        nbits (int, optional): The total number of bits in `x`. Defaults to 64.
+
+    Returns:
+        int: The result of the arithmetic right shift operation.
+    """
     if x >> (nbits - 1):
         return (x >> offset) + ((2**nbits - 1) << (nbits - offset))
     else:
@@ -18,6 +29,16 @@ class RSS3PC:
     binary: bool
 
     def __init__(self, s1, s2, modular=64, decimal=0, binary=False):
+        """
+        Initializes an instance of the replicated secret sharing (3 party) class.
+
+        Args:
+            s1 (int): The first share slice.
+            s2 (int): The second share slice.
+            modular (int, optional): The modular value `k` of Z2k. Defaults to 64.
+            decimal (int, optional): The decimal bit numbers. Defaults to 0.
+            binary (bool, optional): Specifies whether the share is in binary. Defaults to False.
+        """
         self.data = [s1, s2]
         self.decimal = decimal
         self.modular = modular
@@ -36,6 +57,12 @@ class RSS3PC:
         return f"({self.data[0]}, {self.data[1]})"
 
     def set_decimal(self, decimal):
+        """
+        Sets the decimal bit numbers.
+
+        Args:
+            decimal (int): The decimal bit numbers.
+        """
         self.decimal = decimal
 
 
@@ -45,6 +72,19 @@ class Matrix:
     ncols: int
 
     def __init__(self, n, m, data=None):
+        """
+        Initializes an instance of the Matrix class.
+
+        Args:
+            n (int): The number of rows.
+            m (int): The number of columns.
+            data (list, optional): The initial data. Defaults to None.
+
+        Attributes:
+            data (list): The data stored in the instance.
+            nrows (int): The number of rows.
+            ncols (int): The number of columns.
+        """
         if data is None:
             self.data = [0] * (n * m)
         else:
@@ -53,16 +93,46 @@ class Matrix:
         self.ncols = m
 
     def row(self, index):
+        """
+        Returns a row from the data matrix.
+
+        Args:
+            index (int): The index of the row to retrieve.
+
+        Returns:
+            list: The row of data.
+
+        Raises:
+            IndexError: If the index is out of range.
+        """
         if index >= self.nrows:
             raise IndexError("Index out of range")
         return self.data[index * self.ncols : (index + 1) * self.ncols]
 
     def col(self, index):
+        """
+        Returns a list containing the elements in the specified column.
+
+        Args:
+            index (int): The index of the column.
+
+        Returns:
+            list: A list containing the elements in the specified column.
+
+        Raises:
+            IndexError: If the index is out of range.
+        """
         if index >= self.ncols:
             raise IndexError("Index out of range")
         return [self.data[i * self.ncols + index] for i in range(self.nrows)]
 
     def dimensions(self):
+        """
+        Returns the dimensions of the object.
+
+        Returns:
+            tuple: A tuple containing the number of rows and columns.
+        """
         return (self.nrows, self.ncols)
 
     def __getitem__(self, index):
@@ -80,6 +150,12 @@ class Matrix:
             self.data[index * self.ncols : (index + 1) * self.ncols] = value
 
     def transpose(self):
+        """
+        Transposes the matrix by swapping rows with columns.
+
+        Returns:
+            Matrix: The transposed matrix.
+        """
         data = []
         for j in range(self.ncols):
             data.extend(self.col(j))
@@ -105,9 +181,6 @@ class Matrix:
 
 
 class Aby3Protocol:
-    """
-    ABY3 protocol
-    """
 
     player: Player
     PRNGs: list
@@ -117,6 +190,16 @@ class Aby3Protocol:
     def __init__(
         self, player_id, modular_bit=64, demical_bit=20, port_base=None, debug=False
     ):
+        """
+        Initializes an instance of the ABY3Protocol class.
+
+        Args:
+            player_id (int): The ID of the player.
+            modular_bit (int, optional): The number of bits for modular arithmetic. Defaults to 64.
+            demical_bit (int, optional): The number of bits for decimal arithmetic. Defaults to 20.
+            port_base (int, optional): The base port number for communication. Defaults to None.
+            debug (bool, optional): Flag indicating whether to enable verbose output mode. Defaults to False.
+        """
         self.player = Player(player_id, 3, port_base=port_base, debug=debug)
         seed = random.getrandbits(32)
         self.PRNGs = [None, None]
@@ -166,6 +249,18 @@ class Aby3Protocol:
             raise ValueError(f"Invalid type {type(shares[0])} for shares")
 
     def input_share(self, public, owner: int, binary=False):
+        """
+        Wrapper function to share the public value (known to one player) to 3 players.
+
+        Args:
+            public (list of numbers, or Matrix): public values
+            owner (int): the player who knows the public value
+            binary (bool, optional): whether use binary secret sharing. Defaults to False.
+        
+        Returns:
+            list of RSS3PC: secret shared values
+        """
+
         if isinstance(public, Matrix):
             return Matrix(
                 public.nrows, public.ncols, self.input_share(public.data, owner)
@@ -179,7 +274,18 @@ class Aby3Protocol:
         else:
             raise ValueError(f"Invalid type {type(public[0])} for public value")
 
-    def input_share_b(self, public: int, owner: int):
+    def input_share_b(self, public: list, owner: int):
+        """
+        Share the public value in binary secret sharing.
+
+        Args:
+            public (list): public value
+            owner (int): the player who knows the public value
+        
+        Returns:
+            list of RSS3PC: secret shared values
+        """
+
         ret = [
             RSS3PC(0, 0, modular=self.modular_bit, binary=True)
             for _ in range(len(public))
@@ -207,7 +313,18 @@ class Aby3Protocol:
 
         return ret
 
-    def input_share_i(self, public: int, owner: int):
+    def input_share_i(self, public: list, owner: int):
+        """
+        Share the public value in arithmetic secret sharing.
+
+        Args:
+            public (list): public value
+            owner (int): the player who knows the public value
+        
+        Returns:
+            list of RSS3PC: secret shared values
+        """
+
         ret = [RSS3PC(0, 0, modular=self.modular_bit) for _ in range(len(public))]
 
         if owner == self.player.player_id:
@@ -233,7 +350,18 @@ class Aby3Protocol:
 
         return ret
 
-    def input_share_f(self, public: float, owner: int):
+    def input_share_f(self, public: list, owner: int):
+        """
+        Share the public value in fixed point secret sharing.
+
+        Args:
+            public (list): public value
+            owner (int): the player who knows the public value
+        
+        Returns:
+            list of RSS3PC: secret shared values
+        """
+
         public = [round(each * 2**self.demical) for each in public]
         ret = self.input_share_i(public, owner)
         for i in range(len(ret)):
@@ -241,6 +369,17 @@ class Aby3Protocol:
         return ret
 
     def random_shares(self, length, binary=False):
+        """
+        Generate random secret shared values.
+
+        Args:
+            length (int): length of the secret shared values
+            binary (bool, optional): whether use binary secret sharing. Defaults to False.
+        
+        Returns:
+            list of RSS3PC: secret shared values
+        """
+
         ret = [
             RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)
         ]
@@ -251,6 +390,17 @@ class Aby3Protocol:
         return ret
 
     def zero_shares(self, length, binary=False):
+        """
+        Generate zero secret shared values.
+
+        Args:
+            length (int): length of the secret shared values
+            binary (bool, optional): whether use binary secret sharing. Defaults to False.
+        
+        Returns:
+            list of RSS3PC: secret shared values with value = 0.
+        """
+
         ret = [
             RSS3PC(0, 0, modular=self.modular_bit, binary=binary) for _ in range(length)
         ]
@@ -275,7 +425,12 @@ class Aby3Protocol:
 
     def reveal(self, secret, to=None, sign=True):
         """
-        Reveal secret shared values
+        Wrapper function to reveal secret shared values.
+
+        Args:
+            secret (list or Matrix): secret shared values
+            to (int, optional): the player to reveal the secret. Defaults to None, means reveal to all players.
+            sign (bool, optional): whether to reveal the secret with sign. Defaults to True.
         """
 
         if isinstance(secret, Matrix):
@@ -290,6 +445,18 @@ class Aby3Protocol:
             return self.reveal_i(secret, to, sign)
 
     def reveal_b(self, secret: list, to, sign):
+        """
+        Reveal the binary secret shared values.
+
+        Args:
+            secret (list): binary secret shared values
+            to (int): the player to reveal the secret
+            sign (bool): whether to reveal the secret with sign
+        
+        Returns:
+            list: revealed values
+        """
+
         if to is None:
             ret = [0 for _ in range(len(secret))]
             send_buffer = []
@@ -333,6 +500,18 @@ class Aby3Protocol:
                 return ret
 
     def reveal_i(self, secret: list, to, sign):
+        """
+        Reveal the arithmetic secret shared values.
+
+        Args:
+            secret (list): arithmetic secret shared values
+            to (int): the player to reveal the secret
+            sign (bool): whether to reveal the secret with sign
+        
+        Returns:
+            list: revealed values
+        """
+
         if to is None:
             ret = [0 for _ in range(len(secret))]
             send_buffer = []
@@ -369,26 +548,50 @@ class Aby3Protocol:
                 return ret
 
     def reveal_f(self, secret: list, to, sign):
+        """
+        Reveal the arithmetic fixed-point secret shared values.
+
+        Args:
+            secret (list): arithmetic fixed-point secret shared values
+            to (int): the player to reveal the secret
+            sign (bool): whether to reveal the secret with sign
+        
+        Returns:
+            list: revealed values
+        """
+
         ret = self.reveal_i(secret, to, sign)
         if to is None or to == self.player_id:
             for i in range(len(ret)):
                 ret[i] /= 2 ** secret[i].decimal
             return ret
 
-    def reduce(self, share: list, mod_bit):
-        modular = 1 << mod_bit
-        return [
-            RSS3PC(each[0] % modular, each[1] % modular, modular=mod_bit)
-            for each in share
-        ]
-
-    def raise_bit(self, shares: list, raise_bit: int):
-        pass
-
     def shift_left(self, shares: list, shift: int):
+        """
+        Shift the secret shared values to the left.
+
+        Args:
+            shares (list): secret shared values
+            shift (int): the number of bits to shift
+        
+        Returns:
+            list: shifted secret shared values
+        """
         return self.mul_sp(shares, [2**shift] * len(shares))
 
     def shift_right(self, shares: list, shift: int):
+        """
+        Shift the secret shared values to the right. A.K.A. truncation.
+        Reference: ABY3: A Mixed Protocol Framework for Machine Learning, 
+            Section 5.1.2, protocol trunc1. (Probalistic truncation)
+        
+        Args:
+            shares (list): secret shared values
+            shift (int): the number of bits to shift
+        
+        Returns:
+            list: shifted secret shared values
+        """
 
         mod_bit = shares[0].modular
         modular = 1 << mod_bit
@@ -425,6 +628,15 @@ class Aby3Protocol:
         return ret
 
     def i2f(self, shares):
+        """
+        Convert integer secret shared values to fixed-point secret shared values.
+
+        Args:
+            shares (list or Matrix): integer secret shared values
+        
+        Returns:
+            list or Matrix: fixed-point secret shared values
+        """
         if isinstance(shares, Matrix):
             return Matrix(shares.nrows, shares.ncols, self.i2f(shares.data))
 
@@ -438,6 +650,15 @@ class Aby3Protocol:
         return shares
 
     def f2i(self, shares: list):
+        """
+        Convert fixed-point secret shared values to integer secret shared values.
+
+        Args:
+            shares (list or Matrix): fixed-point secret shared values
+        
+        Returns:
+            list or Matrix: integer secret shared values
+        """
         if isinstance(shares, Matrix):
             return Matrix(shares.nrows, shares.ncols, self.f2i(shares.data))
 
@@ -452,12 +673,10 @@ class Aby3Protocol:
 
     def binary_wrapper(self, operation: str, lhs, rhs):
         """
-        TODO: multiplication between fixed point numbers
-            needs one truncation.
-
         Wrapper for all kinds (16) of binary operation.
 
-        Ref: https://www.secretflow.org.cn/zh-CN/docs/spu/0.9.1b0/development/type_system
+        Reference: SecretFlow-SPU, Type System
+            https://www.secretflow.org.cn/zh-CN/docs/spu/0.9.1b0/development/type_system
         """
 
         l_type = self.get_type(lhs)
@@ -505,6 +724,9 @@ class Aby3Protocol:
         return ret
 
     def add(self, lhs, rhs):
+        """
+        Wrapper for addition operation.
+        """
         return self.binary_wrapper("add", lhs, rhs)
 
     def add_pp(self, lhs, rhs):
@@ -561,12 +783,22 @@ class Aby3Protocol:
         return ret
 
     def neg(self, lhs):
+        """
+        Wrapper for negation operation.
+
+        neg(x) = mul_sp(x, -1)
+        """
         if isinstance(lhs, Matrix):
             return Matrix(lhs.nrows, lhs.ncols, self.neg(lhs.data))
 
         return self.mul(lhs, [-1] * len(lhs))
 
     def sub(self, lhs, rhs):
+        """
+        Wrapper for subtraction operation.
+
+        sub(x, y) = add(x, neg(y))
+        """
         return self.add(lhs, self.neg(rhs))
 
     def sub_pp(self, lhs, rhs):
@@ -577,6 +809,9 @@ class Aby3Protocol:
         return [lhs[i] - rhs[i] for i in range(len(lhs))]
 
     def mul(self, lhs, rhs):
+        """
+        Wrapper for multiplication operation.
+        """
         return self.binary_wrapper("mul", lhs, rhs)
 
     def mul_pp(self, lhs, rhs):
@@ -643,6 +878,9 @@ class Aby3Protocol:
         ]
 
     def mat_mul(self, lhs, rhs):
+        """
+        Wrapper for matrix multiplication operation.
+        """
         return self.binary_wrapper("mat_mul", lhs, rhs)
 
     def mat_mul_pp(self, lhs: Matrix, rhs: Matrix):
@@ -739,6 +977,9 @@ class Aby3Protocol:
         return ret_mat
 
     def mat_add(self, lhs, rhs):
+        """
+        Wrapper for matrix addition operation.
+        """
         return self.binary_wrapper("mat_add", lhs, rhs)
 
     def mat_add_pp(self, lhs: Matrix, rhs: Matrix):
@@ -804,6 +1045,18 @@ class Aby3Protocol:
         return ret_mat
 
     def xor_gate(self, lhs: list, rhs: list):
+        """
+        XOR operation for secret shared values.
+
+        Args:
+            lhs (list): binary secret shared values
+            rhs (list): binary secret shared values
+        
+        Returns:
+            list: binary secret shared values
+        """
+
+
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         return [
             RSS3PC(
@@ -816,6 +1069,16 @@ class Aby3Protocol:
         ]
 
     def and_gate(self, lhs: list, rhs: list):
+        """
+        AND operation for secret shared values.
+
+        Args:
+            lhs (list): binary secret shared values
+            rhs (list): binary secret shared values
+        
+        Returns:
+            list: binary secret shared values
+        """
 
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
@@ -843,7 +1106,17 @@ class Aby3Protocol:
 
         return ret
 
-    def or_gate(self, lhs: RSS3PC, rhs: RSS3PC):
+    def or_gate(self, lhs: list, rhs: list):
+        """
+        OR operation for secret shared values.
+
+        Args:
+            lhs (list): binary secret shared value
+            rhs (list): binary secret shared value
+        
+        Returns:
+            list: binary secret shared value
+        """
 
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
@@ -851,11 +1124,34 @@ class Aby3Protocol:
         return self.xor_gate(self.and_gate(lhs, rhs), self.xor_gate(lhs, rhs))
 
     def adder(self, a, b, c):
+        """
+        Performs addition of three inputs using bitwise operations, in MPC way.
+
+        Args:
+            a (list): The first input bit.
+            b (list): The second input bit.
+            c (list): The carry input bit.
+
+        Returns:
+            tuple: A tuple containing the sum bit and the carry bit.
+        """
         sum = self.xor_gate(self.xor_gate(a, b), c)
         carry = self.or_gate(self.and_gate(a, b), self.and_gate(c, self.xor_gate(a, b)))
         return sum, carry
 
     def full_adder(self, a, b, bit_length):
+        """
+        Performs full addition of two n-bit numbers in MPC way.
+
+        Args:
+            a (list): The first n-bit number.
+            b (list): The second n-bit number.
+            bit_length (int): The number of bits in the numbers.
+        
+        Returns:
+            list: The n bit sum of the two numbers.
+        """
+
         sum = []
         carry = [RSS3PC(0, 0, modular=a[0].modular)]
         for i in range(bit_length):
@@ -865,6 +1161,21 @@ class Aby3Protocol:
         return sum
 
     def bit_decomposition(self, a: list):
+        """
+        Decompose the secret shared value into bits, 
+            or convert arithmetic secret shared value to binary secret shared value.
+        
+        Reference: ABY3: A Mixed Protocol Framework for Machine Learning,
+            Section 5.3 (Bit Decomposition). 
+            Slower implementation because no PPA.
+        
+        Args:
+            a (list): arithmetic secret shared value
+        
+        Returns:
+            list: list of binary secret shared value
+        """
+
         nbits = a[0].modular
         decimal = a[0].decimal
         a0, a1, a2 = [], [], []
@@ -948,10 +1259,16 @@ class Aby3Protocol:
 
     def bit_injection(self, bits: list):
         """
-        bits: list of RSS3PC with binary=True, with value in {0, 1}
-        returns: list of RSS3PC with binary=False, with value corresponding to bits
+        Convert a list of single bit binary ss into a list of arithmetic share.
 
-        i.e. return bits in arithmetic share.
+        Reference: ABY3: A Mixed Protocol Framework for Machine Learning,
+            Section 5.4.1, Computing a[[b]]^B = [[ab]]^A by 3-party OT.
+
+        Args:
+             bits (list): list of RSS3PC with binary=True, with value in {0, 1}
+           
+        Returns: 
+            list: list of RSS3PC with binary=False, with value corresponding to bits
         """
 
         ret = [RSS3PC(0, 0, modular=self.modular_bit, binary=False) for _ in bits]
@@ -997,6 +1314,11 @@ class Aby3Protocol:
         return ret
 
     def ltz(self, values: list):
+        """
+        Return 1 if values < 0, 0 otherwise, in arithmetic ss.
+
+        ltz(x) = msb(x) = bit_injection(bit_decomposition(x)[0])
+        """
 
         if type(values[0]) in [int, float]:
             return [1 if each < 0 else 0 for each in values]
@@ -1015,12 +1337,20 @@ class Aby3Protocol:
     def compare(self, lhs: list, rhs: list):
         """
         return 1 if lhs < rhs, 0 otherwise, in arithmetic ss.
+
+        compare(x, y) = ltz(sub(x, y))
         """
 
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         return self.ltz(self.sub(lhs, rhs))
 
     def max_sp(self, lhs, rhs):
+        """
+        Return the maximum of secret shared value and public value.
+
+        max_sp(x, y) = x + (y - x) * compare(x, y)
+        """
+
         smaller = self.compare(lhs, rhs)
         return self.add(self.mul(smaller, self.sub(rhs, lhs)), lhs)
 
@@ -1035,11 +1365,17 @@ class Aby3Protocol:
         return self.input_share(result, 0)
 
     def mat_max_sp(self, lhs, rhs: int):
+        """
+        Return the maximum of matrix and public value.
+        """
         return Matrix(
             lhs.nrows, lhs.ncols, self.max_sp(lhs.data, [rhs] * lhs.nrows * lhs.ncols)
         )
 
     def mat_ltz(self, lhs: Matrix):
+        """
+        Return 1 if matrix[i, j] < 0, 0 otherwise, in arithmetic ss.
+        """
         return Matrix(lhs.nrows, lhs.ncols, self.ltz(lhs.data))
 
 
