@@ -890,23 +890,59 @@ class Aby3Protocol:
         a2_bits = []
 
         batch_size = 1024
-        a0_slices = [a0[i:i + batch_size] for i in range(0, len(a0), batch_size)]
-        a1_slices = [a1[i:i + batch_size] for i in range(0, len(a1), batch_size)]
-        a2_slices = [a2[i:i + batch_size] for i in range(0, len(a2), batch_size)]
+        a0_slices = [a0[i : i + batch_size] for i in range(0, len(a0), batch_size)]
+        a1_slices = [a1[i : i + batch_size] for i in range(0, len(a1), batch_size)]
+        a2_slices = [a2[i : i + batch_size] for i in range(0, len(a2), batch_size)]
 
         for a0, a1, a2 in zip(a0_slices, a1_slices, a2_slices):
             for i in range(nbits):
-                a0_bits.append(RSS3PC(sum([((a0[j][0] >> i) & 1) * 2 ** j for j in range(len(a0))]), sum([((a0[j][1] >> i) & 1) * 2 ** j for j in range(len(a0))]), modular=len(a0)))
-                a1_bits.append(RSS3PC(sum([((a1[j][0] >> i) & 1) * 2 ** j for j in range(len(a1))]), sum([((a1[j][1] >> i) & 1) * 2 ** j for j in range(len(a1))]), modular=len(a0)))
-                a2_bits.append(RSS3PC(sum([((a2[j][0] >> i) & 1) * 2 ** j for j in range(len(a2))]), sum([((a2[j][1] >> i) & 1) * 2 ** j for j in range(len(a2))]), modular=len(a0)))
-        
+                a0_bits.append(
+                    RSS3PC(
+                        sum([((a0[j][0] >> i) & 1) * 2**j for j in range(len(a0))]),
+                        sum([((a0[j][1] >> i) & 1) * 2**j for j in range(len(a0))]),
+                        modular=len(a0),
+                    )
+                )
+                a1_bits.append(
+                    RSS3PC(
+                        sum([((a1[j][0] >> i) & 1) * 2**j for j in range(len(a1))]),
+                        sum([((a1[j][1] >> i) & 1) * 2**j for j in range(len(a1))]),
+                        modular=len(a0),
+                    )
+                )
+                a2_bits.append(
+                    RSS3PC(
+                        sum([((a2[j][0] >> i) & 1) * 2**j for j in range(len(a2))]),
+                        sum([((a2[j][1] >> i) & 1) * 2**j for j in range(len(a2))]),
+                        modular=len(a0),
+                    )
+                )
+
         result = self.full_adder(a0_bits, a1_bits, nbits)
         result = self.full_adder(result, a2_bits, nbits)
 
         ret = []
         for a0, a1, a2 in zip(a0_slices, a1_slices, a2_slices):
             for i in range(len(a0)):
-                ret.append(RSS3PC(sum([((result[j][0] >> i) & 1) * 2 ** j for j in range(len(result))]), sum([((result[j][1] >> i) & 1) * 2 ** j for j in range(len(result))]), modular=nbits, decimal=decimal, binary=True))
+                ret.append(
+                    RSS3PC(
+                        sum(
+                            [
+                                ((result[j][0] >> i) & 1) * 2**j
+                                for j in range(len(result))
+                            ]
+                        ),
+                        sum(
+                            [
+                                ((result[j][1] >> i) & 1) * 2**j
+                                for j in range(len(result))
+                            ]
+                        ),
+                        modular=nbits,
+                        decimal=decimal,
+                        binary=True,
+                    )
+                )
 
         return ret
 
@@ -988,16 +1024,16 @@ class Aby3Protocol:
         smaller = self.compare(lhs, rhs)
         return self.add(self.mul(smaller, self.sub(rhs, lhs)), lhs)
 
-    def mat_div_sp(self, lhs: Matrix, rhs: int):
+    def div_sp(self, lhs: list, rhs: int):
         """
         Tricky implementation
         """
 
         result = self.reveal(lhs, 0)
-        result = Matrix(
-            result.nrows, result.ncols, [each / rhs for each in result.data]
-        )
-        return self.input_share(result, 0)
+        if result:
+            result = [each / rhs for each in result]
+            return self.input_share(result, 0)
+        return lhs
 
     def mat_max_sp(self, lhs, rhs: int):
         return Matrix(

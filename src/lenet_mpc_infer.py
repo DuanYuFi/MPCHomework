@@ -82,42 +82,32 @@ def conv2d(
 def avg_pool(
     X: MatrixND, f: int = 2, stride: int = 2, protocol: Aby3Protocol = None
 ) -> MatrixND:
-    (n_H_prev, n_W_prev, n_C_prev) = X.shape[1:]
+    (n_C_prev, n_H_prev, n_W_prev) = X.shape[1:]
     n_H = int(1 + (n_H_prev - f) / stride)
     n_W = int(1 + (n_W_prev - f) / stride)
-    Z = np.zeros((X.shape[0], n_H, n_W, n_C_prev), dtype=object)
+    Z = np.zeros((X.shape[0], n_C_prev, n_H, n_W), dtype=object)
 
     for h in range(n_H):
         for w in range(n_W):
             vert_start = h * stride
-            vert_end = vert_start + f
             horiz_start = w * stride
-            horiz_end = horiz_start + f
 
             # 将 sum_vals 初始值设置为池化窗口中的第一个加数
-            sum_vals = X[:, vert_start, horiz_start, :]
+            sum_vals = X[:, :, vert_start, horiz_start]
 
             for i in range(f):
                 for j in range(f):
                     if i == 0 and j == 0:
                         continue  # 第一个值已经设置为 sum_vals 的初始值
-                    X_slice = X[:, vert_start + i, horiz_start + j, :]
-                    sum_vals = np.array(
-                        [
-                            protocol.add_ss(sum_vals[b, c], X_slice[b, c])
-                            for b in range(X.shape[0])
-                            for c in range(n_C_prev)
-                        ]
-                    ).reshape(X.shape[0], n_C_prev)
+                    X_slice = X[:, :, vert_start + i, horiz_start + j]
+                    sum_list = protocol.add_ss(
+                        sum_vals.flatten().tolist(), X_slice.flatten().tolist()
+                    )
+                    sum_vals = np.array(sum_list).reshape(sum_vals.shape)
 
-            div_vals = np.array(
-                [
-                    protocol.div_sp(sum_vals[b, c], f * f)
-                    for b in range(X.shape[0])
-                    for c in range(n_C_prev)
-                ]
-            ).reshape(X.shape[0], n_C_prev)
-            Z[:, h, w, :] = div_vals
+            div_list = protocol.div_sp(sum_vals.flatten().tolist(), f * f)
+            div_vals = np.array(div_list).reshape(sum_vals.shape)
+            Z[:, :, h, w] = div_vals
 
     return MatrixND(Z.shape, Z)
 
@@ -273,15 +263,14 @@ def test_accuracy():
     correct = 0
     total = 0
 
-    for inputs, labels in tqdm(test_loader, desc="Testing"):
+    for i, (inputs, labels) in enumerate(test_loader):
         outputs = infer(inputs)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
-
-    print(
-        f"Accuracy of the network on the 10000 test images: {100 * correct / total} %"
-    )
+        tqdm.write(
+            f"Testing [{i+1}/{len(test_loader)}]: Accuracy => {correct} / {total} = {100 * correct / total:.4f}"
+        )
 
 
 if __name__ == "__main__":
