@@ -16,14 +16,9 @@ b = protocol.input_share(input_f, 0)
 c = protocol.sub(a, b)
 
 decompositions = protocol.bit_decomposition(c)
-msb = []
+compositions = protocol.bit_composition(decompositions)
 
-for each in decompositions:
-    msb.append(RSS3PC((each[0] >> 63) & 1, (each[1] >> 63) & 1))
-
-msb = protocol.bit_injection(msb)
-
-result = protocol.reveal(msb, to=0, sign=False)
+result = protocol.reveal(compositions, to=0, sign=False)
 
 if player_id == 0:
     print(result)

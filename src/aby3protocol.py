@@ -1,4 +1,5 @@
 import random
+import math
 
 from network import Player
 from OT import OT3
@@ -1257,6 +1258,31 @@ class Aby3Protocol:
 
         return ret
 
+    def bit_composition(self, bits: list):
+        
+        nbits = bits[0].modular
+        modular = 1 << nbits
+        length = len(bits)
+        demical = bits[0].decimal
+
+        ret = [RSS3PC(0, 0, modular=modular) for _ in range(length)]
+
+        if self.player_id == 0:
+            x1 = [self.PRNGs[1].randrange(modular) for _ in range(length)]
+            neg_x1_minus_x2 = self.input_share([0] * length, 1, True)
+
+        elif self.player_id == 1:
+            x1 = [self.PRNGs[0].randrange(modular) for _ in range(length)]
+            x2 = [self.PRNGs[1].randrange(modular) for _ in range(length)]
+            neg_x1_minus_x2 = self.input_share([(-x1_i - x2_i) % modular for x1_i, x2_i in zip(x1, x2)], 1, True)
+
+        else:
+            x2 = [self.PRNGs[0].randrange(modular) for _ in range(length)]
+            neg_x1_minus_x2 = self.input_share([0] * length, 1, True)
+        
+        
+
+
     def bit_injection(self, bits: list):
         """
         Convert a list of single bit binary ss into a list of arithmetic share.
@@ -1353,6 +1379,13 @@ class Aby3Protocol:
 
         smaller = self.compare(lhs, rhs)
         return self.add(self.mul(smaller, self.sub(rhs, lhs)), lhs)
+    
+    def prefix_or(self, x: list):
+        
+        nbits = x[0].modular
+        pass
+
+
 
     def div_sp(self, lhs: list, rhs: int):
         """
