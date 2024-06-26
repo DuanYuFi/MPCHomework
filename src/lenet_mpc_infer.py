@@ -46,7 +46,9 @@ def conv2d(
     
     (N, C_in, H_in, W_in) = X.shape 
     (C_out, C_in_k, K_H, K_W) = W.shape 
+    
     assert C_in == C_in_k, "Channels of input and kernel are not equal!"
+    
     H_out = int((H_in - K_H + 2 * padding) / stride) + 1
     W_out = int((W_in - K_W + 2 * padding) / stride) + 1
     Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
