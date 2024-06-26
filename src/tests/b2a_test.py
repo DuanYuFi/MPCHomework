@@ -16,9 +16,8 @@ b = protocol.input_share(input_f, 0)
 c = protocol.sub(a, b)
 
 decompositions = protocol.bit_decomposition(c)
-compositions = protocol.bit_composition(decompositions)
 
-result = protocol.reveal(compositions, to=0, sign=False)
+result = protocol.reveal(decompositions, to=0, sign=True)
 
 if player_id == 0:
     print(result)

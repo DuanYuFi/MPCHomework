@@ -1058,7 +1058,7 @@ class Aby3Protocol:
         """
 
 
-        assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
+        assert len(lhs) == len(rhs), f"Lengths of lhs ({len(lhs)}) and rhs ({len(rhs)}) must be equal"
         return [
             RSS3PC(
                 lhs[i][0] ^ rhs[i][0],
@@ -1153,13 +1153,49 @@ class Aby3Protocol:
             list: The n bit sum of the two numbers.
         """
 
-        sum = []
-        carry = [RSS3PC(0, 0, modular=a[0].modular)]
+        assert len(a) == len(b), "Lengths of a and b must be equal"
+
+        decimal = a[0].decimal
+        binary = a[0].binary
+
+        a_bits = []
+        b_bits = []
+
         for i in range(bit_length):
-            sum_bit, carry = self.adder([a[i]], [b[i]], carry)
-            sum.append(sum_bit[0])
-        sum.append(carry[0])
-        return sum
+            tmp_a = []
+            tmp_b = []
+            for ai, bi in zip(a, b):
+                tmp_a.append(RSS3PC((ai[0] >> i) & 1, (ai[1] >> i) & 1, modular=1))
+                tmp_b.append(RSS3PC((bi[0] >> i) & 1, (bi[1] >> i) & 1, modular=1))
+            a_bits.append(tmp_a)
+            b_bits.append(tmp_b)
+
+        result = []
+        carry = [RSS3PC(0, 0, modular=1) for _ in range(len(a))]
+        for i in range(bit_length):
+            sum_bit, carry = self.adder(a_bits[i], b_bits[i], carry)
+            result.append(sum_bit)
+
+        ret = []
+
+        for i in range(len(a)):
+            ret.append(
+                RSS3PC(
+                    sum(
+                        result[k][i][0] << k
+                        for k in range(bit_length)
+                    ), 
+                    sum(
+                        result[k][i][1] << k
+                        for k in range(bit_length)
+                    ),
+                    modular=bit_length,
+                    binary=binary,
+                    decimal=decimal
+                )
+            )
+
+        return ret
 
     def bit_decomposition(self, a: list):
         """
@@ -1183,80 +1219,25 @@ class Aby3Protocol:
 
         if self.player_id == 0:
             for each in a:
-                a0.append(RSS3PC(each[0], 0, each.modular, True))
-                a1.append(RSS3PC(0, each[1], each.modular, True))
-                a2.append(RSS3PC(0, 0, each.modular, True))
+                a0.append(RSS3PC(each[0], 0, each.modular, decimal=decimal, binary=True))
+                a1.append(RSS3PC(0, each[1], each.modular, decimal=decimal, binary=True))
+                a2.append(RSS3PC(0, 0, each.modular, decimal=decimal, binary=True))
         elif self.player_id == 1:
             for each in a:
-                a0.append(RSS3PC(0, 0, each.modular, True))
-                a1.append(RSS3PC(each[0], 0, each.modular, True))
-                a2.append(RSS3PC(0, each[1], each.modular, True))
+                a0.append(RSS3PC(0, 0, each.modular, decimal=decimal, binary=True))
+                a1.append(RSS3PC(each[0], 0, each.modular, decimal=decimal, binary=True))
+                a2.append(RSS3PC(0, each[1], each.modular, decimal=decimal, binary=True))
         else:
             for each in a:
-                a0.append(RSS3PC(0, each[1], each.modular, True))
-                a1.append(RSS3PC(0, 0, each.modular, True))
-                a2.append(RSS3PC(each[0], 0, each.modular, True))
+                a0.append(RSS3PC(0, each[1], each.modular, decimal=decimal, binary=True))
+                a1.append(RSS3PC(0, 0, each.modular, decimal=decimal, binary=True))
+                a2.append(RSS3PC(each[0], 0, each.modular, decimal=decimal, binary=True))
 
-        a0_bits = []
-        a1_bits = []
-        a2_bits = []
 
-        batch_size = 1024
-        a0_slices = [a0[i : i + batch_size] for i in range(0, len(a0), batch_size)]
-        a1_slices = [a1[i : i + batch_size] for i in range(0, len(a1), batch_size)]
-        a2_slices = [a2[i : i + batch_size] for i in range(0, len(a2), batch_size)]
+        result = self.full_adder(a0, a1, nbits)
+        result = self.full_adder(result, a2, nbits)
 
-        for a0, a1, a2 in zip(a0_slices, a1_slices, a2_slices):
-            for i in range(nbits):
-                a0_bits.append(
-                    RSS3PC(
-                        sum([((a0[j][0] >> i) & 1) * 2**j for j in range(len(a0))]),
-                        sum([((a0[j][1] >> i) & 1) * 2**j for j in range(len(a0))]),
-                        modular=len(a0),
-                    )
-                )
-                a1_bits.append(
-                    RSS3PC(
-                        sum([((a1[j][0] >> i) & 1) * 2**j for j in range(len(a1))]),
-                        sum([((a1[j][1] >> i) & 1) * 2**j for j in range(len(a1))]),
-                        modular=len(a0),
-                    )
-                )
-                a2_bits.append(
-                    RSS3PC(
-                        sum([((a2[j][0] >> i) & 1) * 2**j for j in range(len(a2))]),
-                        sum([((a2[j][1] >> i) & 1) * 2**j for j in range(len(a2))]),
-                        modular=len(a0),
-                    )
-                )
-
-        result = self.full_adder(a0_bits, a1_bits, nbits)
-        result = self.full_adder(result, a2_bits, nbits)
-
-        ret = []
-        for a0, a1, a2 in zip(a0_slices, a1_slices, a2_slices):
-            for i in range(len(a0)):
-                ret.append(
-                    RSS3PC(
-                        sum(
-                            [
-                                ((result[j][0] >> i) & 1) * 2**j
-                                for j in range(len(result))
-                            ]
-                        ),
-                        sum(
-                            [
-                                ((result[j][1] >> i) & 1) * 2**j
-                                for j in range(len(result))
-                            ]
-                        ),
-                        modular=nbits,
-                        decimal=decimal,
-                        binary=True,
-                    )
-                )
-
-        return ret
+        return result
 
     def bit_composition(self, bits: list):
         
