@@ -257,7 +257,8 @@ def test_accuracy():
     total = 0
 
     for i, (inputs, labels) in enumerate(test_loader):
-        outputs = infer(inputs)
+        padded_inputs = F.pad(inputs, (2, 2, 2, 2))
+        outputs = infer(padded_inputs)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
