@@ -578,6 +578,7 @@ class Aby3Protocol:
         Returns:
             list: shifted secret shared values
         """
+
         return self.mul_sp(shares, [2**shift] * len(shares))
 
     def shift_right(self, shares: list, shift: int):
@@ -593,6 +594,9 @@ class Aby3Protocol:
         Returns:
             list: shifted secret shared values
         """
+
+        if shares[0].binary:
+            return [RSS3PC(each[0] >> shift, each[1] >> shift, each.modular, each.decimal, binary=True) for each in shares]
 
         mod_bit = shares[0].modular
         modular = 1 << mod_bit
@@ -1348,6 +1352,16 @@ class Aby3Protocol:
                 ret[i][1] = c1[i]
 
         return ret
+    
+    def a2b(self, arith_share: list):
+        if arith_share[0].binary:
+            return arith_share
+        return self.bit_decomposition(arith_share)
+    
+    def b2a(self, bits: list):
+        if not bits[0].binary:
+            return bits
+        return self.bit_composition(bits)
 
     def ltz(self, values: list):
         """
@@ -1379,6 +1393,24 @@ class Aby3Protocol:
 
         assert len(lhs) == len(rhs), "Lengths of lhs and rhs must be equal"
         return self.ltz(self.sub(lhs, rhs))
+    
+    def mux(self, choice: list, a: list, b: list):
+        """
+        Multiplexor operation for secret shared values.
+
+        Args:
+            choice (list): binary secret shared values
+            a (list): secret shared values
+            b (list): secret shared values
+        
+        Returns:
+            list: secret shared values
+        """
+
+        assert len(choice) == len(a) == len(b), "Lengths of choice, a, and b must be equal"
+
+        return self.add(self.mul(choice, self.sub(a, b)), b)
+
 
     def max_sp(self, lhs, rhs):
         """
@@ -1393,19 +1425,129 @@ class Aby3Protocol:
     def prefix_or(self, x: list):
         
         nbits = x[0].modular
-        pass
+        rounds = math.ceil(math.log2(nbits))
+        x_b = self.a2b(x)
+
+        for idx in range(rounds):
+            offset = 1 << idx
+            x_b = self.or_gate(x_b, self.shift_right(x_b, offset))
+        
+        return x_b
+    
+    def highest_bit(self, x: list):
+        y = self.prefix_or(x)       # y: binary share
+        y1 = self.shift_right(y, 1)
+        return self.xor_gate(y, y1)
+    
+    def bitrev(self, bits: list, start: int, end: int):
+        """
+        Reverse the bits in the range [start, end) of the list.
+
+        Args:
+            bits (list): list of RSS3PC with binary=True
+            start (int): start index of the range
+            end (int): end index of the range
+        
+        Returns:
+            list: list of RSS3PC with binary=True
+        """
+        assert start < end, "Start index must be less than end index"
+        assert bits[0].binary, "Input must be binary shares"
+
+        n = end - start
+        if n <= 1:
+            return bits
+
+        inv_mask = (1 << end) - 1
+        inv_mask ^= ((1 << start) - 1)
+
+        ret = bits
+
+        for i in range(len(ret)):
+            ret[i][0] ^= inv_mask
+            ret[i][1] ^= inv_mask
+        
+        return ret
+    
+    def hint_bits(self, x: list, nbits: int):
+        """
+        Return the hint bits of the secret shared value.
+
+        Args:
+            x (list): arithmetic secret shared value
+            nbits (int): number of bits to return
+        
+        Returns:
+            list: binary secret shared value
+        """
+
+        assert x[0].binary, "Input must be binary shares"
+
+        ret = x
+        mask = (1 << nbits) - 1
+
+        for i in range(nbits):
+            ret[i][0] &= mask
+            ret[i][1] &= mask
+        
+        return ret
+
+    def div_goldschmidt_general_sp(self, a: list, b: float):
+        """
+        Reference:
+            Chapter 3.4 Division @ Secure Computation With Fixed Point Number
+            http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.221.1305&rep=rep1&type=pdf
+
+        Goldschmidt main idea:
+            Target:
+            calculate a/b
+
+            Symbols:
+            f: number of fractional bits in fixed point.
+            m: the highest position of bit with value == 1.
+
+            Initial guess:
+            let b = c*2^{m} where c = normalize(x), c \in [0.5, 1)
+            let w = 1/c as the initial guess.
+
+            Iteration (reduce error):
+            let r = w, denotes result
+            let e = 1-c*w, denotes error
+            for _ in iters:
+                r = r(1 + e)
+                e = e * e
+
+            return r * a * 2^{-m}
+
+        Precision is decided by f.
+        """
 
 
+        sign = -1 if b < 0 else 1
+        b = abs(b)
+        m = math.ceil(math.log2(b + 1))
+        c = b / (2 ** m)
+        w = 1 / c
+        r = w
+        e = 1 - c * w
+        n_iters = 10
+
+        for _ in range(n_iters):
+            r = r * (1 + e)
+            e *= e
+        
+        factor = pow(2, -m) * sign * r
+        ret = self.mul(a, [factor] * len(a))
+        return ret
+        
 
     def div_sp(self, lhs: list, rhs: int):
         """
-        Tricky implementation
-        TODO
+        Reference: SecretFlow-SPU, 
+            libspu/kernel/hal/fxp_base.cc, function div_goldschmidt
         """
 
-        result = self.reveal(lhs)
-        result = [each / rhs for each in result]
-        return self.input_share(result, 0)
+        return self.div_goldschmidt_general_sp(lhs, rhs)
 
     def mat_max_sp(self, lhs, rhs: int):
         """
