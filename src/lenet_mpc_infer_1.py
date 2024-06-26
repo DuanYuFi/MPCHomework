@@ -55,18 +55,16 @@ def conv2d(
     Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
     vis = np.zeros((N, C_out, H_out, W_out), dtype=object)
     
-    
-    
-    
-    for n in tqdm(range(N)):
+    for n in range(N):
         for c_out in range(C_out):
             for h in range(H_out):
                 for w in range(W_out):
+                    # 提取输入张量中的子矩阵
                     sub_matrix = X[n, :, h:h + K_H, w:w + K_W].reshape(C_in * K_H, K_W)
+                    # 将卷积核reshape成合适的形状
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
+                    # 使用mat_mul进行矩阵乘法
                     Z[n, c_out, h, w] = np.sum(protocol.mat_mul_ss(sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()))
-                    
-                    
                     # for c_in in range(C_in):
                     #     for kh in range(K_H):
                     #         for kw in range(K_W):
@@ -204,7 +202,7 @@ def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND
 
 
 def infer(inputs):
-    player_id = 0
+    player_id = 1
     protocol = Aby3Protocol(player_id)
 
     # 从文件中读取参数和输入数据
