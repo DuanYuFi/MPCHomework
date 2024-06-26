@@ -1244,9 +1244,9 @@ class Aby3Protocol:
         nbits = bits[0].modular
         modular = 1 << nbits
         length = len(bits)
-        demical = bits[0].decimal
+        decimal = bits[0].decimal
 
-        ret = [RSS3PC(0, 0, modular=modular) for _ in range(length)]
+        ret = [RSS3PC(0, 0, modular=nbits, decimal=decimal) for _ in range(length)]
 
         if self.player_id == 0:
             x1 = [self.PRNGs[1].randrange(modular) for _ in range(length)]
@@ -1260,8 +1260,37 @@ class Aby3Protocol:
         else:
             x2 = [self.PRNGs[0].randrange(modular) for _ in range(length)]
             neg_x1_minus_x2 = self.input_share([0] * length, 1, True)
+
+        x0_share = self.full_adder(bits, neg_x1_minus_x2, nbits)
+
+        for i in range(len(x0_share)):
+            x0_share[i].set_decimal(0)
         
+        if self.player_id == 0:
+            x0 = self.reveal(x0_share, 0)
+            self.reveal(x0_share, 2)
+
+            for i in range(len(x0)):
+                ret[i][0] = x0[i]
+                ret[i][1] = x1[i]
         
+        elif self.player_id == 1:
+            self.reveal(x0_share, 0)
+            self.reveal(x0_share, 2)
+
+            for i in range(len(x1)):
+                ret[i][0] = x1[i]
+                ret[i][1] = x2[i]
+        
+        else:
+            self.reveal(x0_share, 0)
+            x0 = self.reveal(x0_share, 2)
+
+            for i in range(len(x2)):
+                ret[i][0] = x2[i]
+                ret[i][1] = x0[i]
+        
+        return ret
 
 
     def bit_injection(self, bits: list):
