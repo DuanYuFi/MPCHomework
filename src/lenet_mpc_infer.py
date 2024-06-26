@@ -25,7 +25,7 @@ class MatrixND(np.ndarray):
     def to_mpc_matrix(self):
         dims = self.shape
         assert len(dims) == 2
-        flat_data = self.flatten()
+        flat_data = list(self.flatten())
         return Matrix(dims[0], dims[1], flat_data)
 
     @classmethod
@@ -54,7 +54,6 @@ def conv2d(
     H_out = int((H_in - K_H + 2 * padding) / stride) + 1
     W_out = int((W_in - K_W + 2 * padding) / stride) + 1
     Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
-    vis = np.zeros((N, C_out, H_out, W_out), dtype=object)
 
     for n in tqdm(range(N)):
         for c_out in range(C_out):
@@ -64,11 +63,13 @@ def conv2d(
                         C_in * K_H, K_W
                     )
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
-                    Z[n, c_out, h, w] = np.sum(
-                        protocol.mat_mul_ss(
+                    mat_res = protocol.mat_mul_ss(
                             sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
                         )
-                    )
+                    Z[n, c_out, h, w] = [mat_res.data[0]]
+                    for x in mat_res.data[1:]:
+                        Z[n, c_out, h, w] = protocol.add_ss(Z[n, c_out, h, w], [x])
+                    Z[n, c_out, h, w] = Z[n, c_out, h, w][0]
 
                     # for c_in in range(C_in):
                     #     for kh in range(K_H):
@@ -269,7 +270,7 @@ def test_accuracy():
         download=True,
         transform=transform,
     )
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
 
     correct = 0
     total = 0
