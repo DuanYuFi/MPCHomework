@@ -43,38 +43,30 @@ def conv2d(
     padding: int = 0,
     protocol: Aby3Protocol = None,
 ) -> MatrixND:
-    return X
-
-    (n_H_prev, n_W_prev) = X.shape[1:3]
-    (f, _, n_C_prev, n_C) = W.shape
-    n_H = int((n_H_prev - f + 2 * padding) / stride) + 1
-    n_W = int((n_W_prev - f + 2 * padding) / stride) + 1
-    Z = np.zeros((X.shape[0], n_H, n_W, n_C), dtype=object)
-
-    X_pad = np.pad(
-        X, ((0, 0), (padding, padding), (padding, padding), (0, 0)), "constant"
-    )
-
-    for h in range(n_H):
-        for w in range(n_W):
-            for c in range(n_C):
-                vert_start = h * stride
-                vert_end = vert_start + f
-                horiz_start = w * stride
-                horiz_end = horiz_start + f
-                X_slice = X_pad[:, vert_start:vert_end, horiz_start:horiz_end, :]
-                Z[:, h, w, c] = protocol.add_ss(
-                    protocol.mat_mul_ss(
-                        Matrix(f, f, [item for sublist in X_slice for item in sublist]),
-                        Matrix(
-                            f,
-                            f,
-                            [item for sublist in W[:, :, :, c] for item in sublist],
-                        ),
-                    ),
-                    b[c],
-                )
-
+    
+    (N, C_in, H_in, W_in) = X.shape 
+    (C_out, C_in_k, K_H, K_W) = W.shape 
+    assert C_in == C_in_k, "Channels of input and kernel are not equal!"
+    H_out = int((H_in - K_H + 2 * padding) / stride) + 1
+    W_out = int((W_in - K_W + 2 * padding) / stride) + 1
+    Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
+    vis = np.zeros((N, C_out, H_out, W_out), dtype=object)
+    
+    for n in range(N):
+        for c_out in range(C_out):
+            for h in range(H_out):
+                for w in range(W_out):
+                    for c_in in range(C_in):
+                        for kh in range(K_H):
+                            for kw in range(K_W):
+                                mul_x = protocol.mul_ss(X[n, c_in, h + kh, w + kw], W[c_out, c_in, kh, kw])
+                                if vis[n, c_out, h, w] == 0:
+                                    vis[n, c_out, h, w] = 1 
+                                    Z[n, c_out, h, w] = protocol.add_sp(mul_x, 0)
+                                else:
+                                    Z[n, c_out, h, w] = protocol.add_ss(mul_x, Z[n, c_out, h, w])
+                    
+        
     return MatrixND(Z.shape, Z)
 
 
@@ -146,7 +138,7 @@ def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND
         params["conv1.weight"],  # torch.Size([6, 1, 5, 5]),
         params["conv1.bias"],  # torch.Size([6]),
         stride=1,
-        padding=2,
+        padding=0,
         protocol=protocol,
     )
     X = relu(X, protocol)  # conv0 output shape:  (1, 6, 28, 28)
