@@ -1,12 +1,13 @@
 import os
+import re
 import sys
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from tqdm import tqdm
-import torch.nn.functional as F
 
 from aby3protocol import Aby3Protocol, Matrix
 
@@ -44,40 +45,41 @@ def conv2d(
     padding: int = 0,
     protocol: Aby3Protocol = None,
 ) -> MatrixND:
-    
-    (N, C_in, H_in, W_in) = X.shape 
-    (C_out, C_in_k, K_H, K_W) = W.shape 
-    
+
+    (N, C_in, H_in, W_in) = X.shape
+    (C_out, C_in_k, K_H, K_W) = W.shape
+
     assert C_in == C_in_k, "Channels of input and kernel are not equal!"
-    
+
     H_out = int((H_in - K_H + 2 * padding) / stride) + 1
     W_out = int((W_in - K_W + 2 * padding) / stride) + 1
     Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
     vis = np.zeros((N, C_out, H_out, W_out), dtype=object)
-    
-    
-    
-    
+
     for n in tqdm(range(N)):
         for c_out in range(C_out):
             for h in range(H_out):
                 for w in range(W_out):
-                    sub_matrix = X[n, :, h:h + K_H, w:w + K_W].reshape(C_in * K_H, K_W)
+                    sub_matrix = X[n, :, h : h + K_H, w : w + K_W].reshape(
+                        C_in * K_H, K_W
+                    )
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
-                    Z[n, c_out, h, w] = np.sum(protocol.mat_mul_ss(sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()))
-                    
-                    
+                    Z[n, c_out, h, w] = np.sum(
+                        protocol.mat_mul_ss(
+                            sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
+                        )
+                    )
+
                     # for c_in in range(C_in):
                     #     for kh in range(K_H):
                     #         for kw in range(K_W):
                     #             mul_x = protocol.mul_ss([X[n, c_in, h + kh, w + kw]], [W[c_out, c_in, kh, kw]])
                     #             if vis[n, c_out, h, w] == 0:
-                    #                 vis[n, c_out, h, w] = 1 
+                    #                 vis[n, c_out, h, w] = 1
                     #                 Z[n, c_out, h, w] = protocol.add_sp(mul_x, [0])
                     #             else:
                     #                 Z[n, c_out, h, w] = protocol.add_ss(mul_x, Z[n, c_out, h, w])
-                    
-        
+
     return MatrixND(Z.shape, Z)
 
 
@@ -204,7 +206,12 @@ def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND
 
 
 def infer(inputs):
-    player_id = 0
+    match = re.search(r"_(\d+)", sys.argv[0])
+    if match:
+        player_id = int(match.group(1))
+        print(f"Using player-{player_id} in {sys.argv[0]}")
+    else:
+        player_id = int(sys.argv[1])
     protocol = Aby3Protocol(player_id)
 
     # 从文件中读取参数和输入数据
