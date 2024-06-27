@@ -189,7 +189,7 @@ class Aby3Protocol:
     ot_for_bi: OT3  # ot for bit injection in ABY3
 
     def __init__(
-        self, player_id, modular_bit=64, demical_bit=20, port_base=None, debug=False
+        self, player_id, modular_bit=64, demical_bit=20, iters_in_div=10, port_base=None, debug=False
     ):
         """
         Initializes an instance of the ABY3Protocol class.
@@ -212,6 +212,7 @@ class Aby3Protocol:
         self.player_id = player_id
         self.demical = demical_bit
         self.modular_bit = modular_bit
+        self.iters_in_div = iters_in_div
 
         self.ot_for_bi = OT3(2, 1, 0, player_id, self)
 
@@ -1544,7 +1545,7 @@ class Aby3Protocol:
         w = 1 / c
         r = w
         e = 1 - c * w
-        n_iters = 10
+        n_iters = self.iters_in_div
 
         for _ in range(n_iters):
             r = r * (1 + e)
