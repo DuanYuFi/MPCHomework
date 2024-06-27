@@ -5,9 +5,9 @@ import sys
 import numpy as np
 import torch
 import torch.nn.functional as F
+from rich.progress import Progress
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from tqdm import tqdm
 
 from aby3protocol import Aby3Protocol, Matrix
 
@@ -36,7 +36,6 @@ class MatrixND(np.ndarray):
 
 
 # 卷积操作
-# TODO: Need Check
 def conv2d(
     X: MatrixND,
     W: MatrixND,
@@ -44,6 +43,8 @@ def conv2d(
     stride: int = 1,
     padding: int = 0,
     protocol: Aby3Protocol = None,
+    progress: Progress = None,
+    parent_task_id=None,
 ) -> MatrixND:
 
     (N, C_in, H_in, W_in) = X.shape
@@ -55,7 +56,12 @@ def conv2d(
     W_out = int((W_in - K_W + 2 * padding) / stride) + 1
     Z = np.zeros((N, C_out, H_out, W_out), dtype=object)
 
-    for n in tqdm(range(N)):
+    for n in range(N):
+        child_task_id = progress.add_task(
+            f"[cyan]Processing batch {n + 1}/{N}",
+            total=C_out * H_out * W_out,
+            parent=parent_task_id,
+        )
         for c_out in range(C_out):
             for h in range(H_out):
                 for w in range(W_out):
@@ -64,35 +70,35 @@ def conv2d(
                     )
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
                     mat_res = protocol.mat_mul_ss(
-                            sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
-                        )
+                        sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
+                    )
                     Z[n, c_out, h, w] = [mat_res.data[0]]
                     for x in mat_res.data[1:]:
                         Z[n, c_out, h, w] = protocol.add_ss(Z[n, c_out, h, w], [x])
                     Z[n, c_out, h, w] = Z[n, c_out, h, w][0]
-
-                    # for c_in in range(C_in):
-                    #     for kh in range(K_H):
-                    #         for kw in range(K_W):
-                    #             mul_x = protocol.mul_ss([X[n, c_in, h + kh, w + kw]], [W[c_out, c_in, kh, kw]])
-                    #             if vis[n, c_out, h, w] == 0:
-                    #                 vis[n, c_out, h, w] = 1
-                    #                 Z[n, c_out, h, w] = protocol.add_sp(mul_x, [0])
-                    #             else:
-                    #                 Z[n, c_out, h, w] = protocol.add_ss(mul_x, Z[n, c_out, h, w])
+                    progress.advance(child_task_id)
+        progress.remove_task(child_task_id)
 
     return MatrixND(Z.shape, Z)
 
 
 # 平均池化操作
 def avg_pool(
-    X: MatrixND, f: int = 2, stride: int = 2, protocol: Aby3Protocol = None
+    X: MatrixND,
+    f: int = 2,
+    stride: int = 2,
+    protocol: Aby3Protocol = None,
+    progress: Progress = None,
+    parent_task_id=None,
 ) -> MatrixND:
     (n_C_prev, n_H_prev, n_W_prev) = X.shape[1:]
     n_H = int(1 + (n_H_prev - f) / stride)
     n_W = int(1 + (n_W_prev - f) / stride)
     Z = np.zeros((X.shape[0], n_C_prev, n_H, n_W), dtype=object)
 
+    child_task_id = progress.add_task(
+        f"[cyan]Pooling...", total=n_H * n_W, parent=parent_task_id
+    )
     for h in range(n_H):
         for w in range(n_W):
             vert_start = h * stride
@@ -114,6 +120,8 @@ def avg_pool(
             div_list = protocol.div_sp(sum_vals.flatten().tolist(), f * f)
             div_vals = np.array(div_list).reshape(sum_vals.shape)
             Z[:, :, h, w] = div_vals
+            progress.advance(child_task_id)
+    progress.remove_task(child_task_id)
 
     return MatrixND(Z.shape, Z)
 
@@ -132,7 +140,6 @@ def flatten(X: MatrixND) -> MatrixND:
 
 
 # 全连接层
-# TODO: 代码写完但还没调试
 def dense(
     X: MatrixND, W: MatrixND, b: MatrixND, protocol: Aby3Protocol = None
 ) -> MatrixND:
@@ -146,62 +153,143 @@ def dense(
 
 # LeNet-5 前向传播
 def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND:
-    # 卷积层 1 -> ReLU -> 池化层 1
-    X = conv2d(
-        X,
-        params["conv1.weight"],  # torch.Size([6, 1, 5, 5]),
-        params["conv1.bias"],  # torch.Size([6]),
-        stride=1,
-        padding=0,
-        protocol=protocol,
-    )
-    X = relu(X, protocol)  # conv0 output shape:  (1, 6, 28, 28)
-    X = avg_pool(
-        X, f=2, stride=2, protocol=protocol
-    )  # pool0 output shape:  (1, 6, 14, 14)
+    with Progress() as progress:
+        # 创建父任务
+        parent_task_id = progress.add_task("[green]LeNet Forward Pass", total=7)
 
-    # 卷积层 2 -> ReLU -> 池化层 2
-    X = conv2d(
-        X,
-        params["conv2.weight"],  # torch.Size([16, 6, 5, 5]),
-        params["conv2.bias"],  # torch.Size([16]),
-        stride=1,
-        padding=0,
-        protocol=protocol,
-    )  # conv1 output shape:  (1, 16, 10, 10)
-    X = relu(X, protocol)
-    X = avg_pool(
-        X, f=2, stride=2, protocol=protocol
-    )  # pool1 output shape:  (1, 16, 5, 5)
+        # 卷积层 1
+        progress.update(
+            parent_task_id, description=f"[green]Conv Layer 1 # input shape: {X.shape}"
+        )
+        X = conv2d(
+            X,
+            params["conv1.weight"],  # torch.Size([6, 1, 5, 5]),
+            params["conv1.bias"],  # torch.Size([6]),
+            stride=1,
+            padding=0,
+            protocol=protocol,
+            progress=progress,
+            parent_task_id=parent_task_id,
+        )
+        progress.advance(parent_task_id)
 
-    # 扁平化
-    X = flatten(X)
+        # ReLU 层 1
+        progress.update(
+            parent_task_id, description=f"[green]ReLU Layer 1 # input shape: {X.shape}"
+        )
+        X = relu(X, protocol)
+        progress.advance(parent_task_id)
 
-    # 全连接层 1 -> ReLU
-    X = dense(
-        X,
-        params["fc1.weight"],  # torch.Size([120, 400]),
-        params["fc1.bias"],  # torch.Size([120]),
-        protocol,
-    )  # dense0 output shape:         (1, 120)
-    X = relu(X, protocol)
+        # 平均池化层 1
+        progress.update(
+            parent_task_id,
+            description=f"[green]Avg Pool Layer 1 # input shape: {X.shape}",
+        )
+        X = avg_pool(
+            X,
+            f=2,
+            stride=2,
+            protocol=protocol,
+            progress=progress,
+            parent_task_id=parent_task_id,
+        )  # pool0 output shape:  (1, 6, 14, 14)
+        progress.advance(parent_task_id)
 
-    # 全连接层 2 -> ReLU
-    X = dense(
-        X,
-        params["fc2.weight"],  # torch.Size([84, 120]),
-        params["fc2.bias"],  # torch.Size([84]),
-        protocol,
-    )
-    X = relu(X, protocol)  # dense1 output shape:         (1, 84)
+        # 卷积层 2
+        progress.update(
+            parent_task_id, description=f"[green]Conv Layer 2 # input shape: {X.shape}"
+        )
+        X = conv2d(
+            X,
+            params["conv2.weight"],  # torch.Size([16, 6, 5, 5]),
+            params["conv2.bias"],  # torch.Size([16]),
+            stride=1,
+            padding=0,
+            protocol=protocol,
+            progress=progress,
+            parent_task_id=parent_task_id,
+        )  # conv1 output shape:  (1, 16, 10, 10)
+        progress.advance(parent_task_id)
 
-    # 输出层
-    X = dense(
-        X,
-        params["fc3.weight"],  # torch.Size([10, 84])
-        params["fc3.bias"],  # torch.Size([10]),
-        protocol,
-    )  # dense2 output shape:         (1, 10)
+        # ReLU 层 2
+        progress.update(
+            parent_task_id, description=f"[green]ReLU Layer 2 # input shape: {X.shape}"
+        )
+        X = relu(X, protocol)
+        progress.advance(parent_task_id)
+
+        # 平均池化层 2
+        progress.update(
+            parent_task_id,
+            description=f"[green]Avg Pool Layer 2 # input shape: {X.shape}",
+        )
+        X = avg_pool(
+            X,
+            f=2,
+            stride=2,
+            protocol=protocol,
+            progress=progress,
+            parent_task_id=parent_task_id,
+        )  # pool1 output shape:  (1, 16, 5, 5)
+        progress.advance(parent_task_id)
+
+        # 扁平化层
+        progress.update(
+            parent_task_id, description=f"[green]Flatten Layer # input shape: {X.shape}"
+        )
+        X = flatten(X)
+        progress.advance(parent_task_id)
+
+        # 全连接层 1
+        progress.update(
+            parent_task_id, description=f"[green]FC Layer 1 # input shape: {X.shape}"
+        )
+        X = dense(
+            X,
+            params["fc1.weight"],  # torch.Size([120, 400]),
+            params["fc1.bias"],  # torch.Size([120]),
+            protocol,
+        )  # dense0 output shape:         (1, 120)
+        progress.advance(parent_task_id)
+
+        # ReLU 层 3
+        progress.update(
+            parent_task_id, description=f"[green]ReLU Layer 3 # input shape: {X.shape}"
+        )
+        X = relu(X, protocol)
+        progress.advance(parent_task_id)
+
+        # 全连接层 2
+        progress.update(
+            parent_task_id, description=f"[green]FC Layer 2 # input shape: {X.shape}"
+        )
+        X = dense(
+            X,
+            params["fc2.weight"],  # torch.Size([84, 120]),
+            params["fc2.bias"],  # torch.Size([84]),
+            protocol,
+        )
+        progress.advance(parent_task_id)
+
+        # ReLU 层 4
+        progress.update(
+            parent_task_id, description=f"[green]ReLU Layer 4 # input shape: {X.shape}"
+        )
+        X = relu(X, protocol)
+        progress.advance(parent_task_id)
+
+        # 输出层
+        progress.update(
+            parent_task_id, description=f"[green]FC Layer 3 # input shape: {X.shape}"
+        )
+        X = dense(
+            X,
+            params["fc3.weight"],  # torch.Size([10, 84])
+            params["fc3.bias"],  # torch.Size([10]),
+            protocol,
+        )  # dense2 output shape:         (1, 10)
+        progress.advance(parent_task_id)
+        progress.update(parent_task_id, description=f"[green]Output shape: {X.shape}")
 
     return X
 
@@ -246,8 +334,11 @@ def infer(inputs):
 
     # 模型前向传播推理
     outputs = lenet_forward(X_shared, params_shared, protocol)
+
     # 通过协议将推理结果揭露
-    revealed_outputs = protocol.reveal(outputs)
+    revealed_outputs = MatrixND(
+        outputs.shape, protocol.reveal(outputs.flatten().tolist())
+    )
     protocol.disconnect()
 
     # 显示结果
@@ -270,7 +361,7 @@ def test_accuracy():
         download=True,
         transform=transform,
     )
-    test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     correct = 0
     total = 0
@@ -281,7 +372,7 @@ def test_accuracy():
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
-        tqdm.write(
+        print(
             f"Testing [{i+1}/{len(test_loader)}]: Accuracy => {correct} / {total} = {100 * correct / total:.4f}"
         )
 
