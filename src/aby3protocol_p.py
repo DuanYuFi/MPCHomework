@@ -734,7 +734,7 @@ class Aby3Protocol:
         ret = Matrix(n, m)
         for i in range(n):
             for j in range(m):
-                ret[i, j] = (lhs[i, j] + rhs[i, j]) % self.modular
+                ret[i, j] = lhs[i, j] + rhs[i, j]
 
         return ret
 

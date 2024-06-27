@@ -601,7 +601,7 @@ class Aby3Protocol:
         mod_bit = shares[0].modular
         modular = 1 << mod_bit
 
-        ret = [RSS3PC(0, 0, modular=mod_bit) for _ in range(len(shares))]
+        ret = [RSS3PC(0, 0, modular=mod_bit, decimal=shares[0].decimal) for _ in range(len(shares))]
         if self.player_id == 0:
             for i in range(len(shares)):
                 ret[i][0] = arithmetic_shift_right(shares[i][0], shift, mod_bit)
@@ -759,6 +759,7 @@ class Aby3Protocol:
                 (_lhs[0] + _rhs[0]) % modular,
                 (_lhs[1] + _rhs[1]) % modular,
                 modular=mod_bit,
+                decimal=lhs[0].decimal
             )
             for _lhs, _rhs in zip(lhs, rhs)
         ]
@@ -779,7 +780,7 @@ class Aby3Protocol:
         if isinstance(rhs[0], float):
             rhs = [round(each * 2**self.demical) for each in rhs]
 
-        ret = [RSS3PC(lhs[i][0], lhs[i][1], modular=mod_bit) for i in range(len(lhs))]
+        ret = [RSS3PC(lhs[i][0], lhs[i][1], modular=mod_bit, decimal=lhs[0].decimal) for i in range(len(lhs))]
         if self.player_id == 0:
             for i in range(len(lhs)):
                 ret[i][1] = (ret[i][1] + rhs[i]) % modular
@@ -839,7 +840,7 @@ class Aby3Protocol:
         mod_bit = lhs[0].modular
         modular = 1 << mod_bit
 
-        ret = [RSS3PC(0, 0, modular=mod_bit) for _ in lhs]
+        ret = [RSS3PC(0, 0, modular=mod_bit, decimal=lhs[0].decimal) for _ in lhs]
         send_buffer = []
 
         for i in range(len(lhs)):
@@ -880,6 +881,7 @@ class Aby3Protocol:
                 (lhs[i][0] * rhs[i]) % modular,
                 (lhs[i][1] * rhs[i]) % modular,
                 modular=mod_bit,
+                decimal=lhs[0].decimal
             )
             for i in range(len(lhs))
         ]
@@ -1070,6 +1072,7 @@ class Aby3Protocol:
                 lhs[i][0] ^ rhs[i][0],
                 lhs[i][1] ^ rhs[i][1],
                 modular=lhs[0].modular,
+                decimal=lhs[0].decimal,
                 binary=True,
             )
             for i in range(len(lhs))
@@ -1091,7 +1094,7 @@ class Aby3Protocol:
         assert lhs[0].modular == rhs[0].modular, "Modulars of lhs and rhs must be equal"
 
         mod_bit = lhs[0].modular
-        ret = [RSS3PC(0, 0, modular=mod_bit, binary=True) for _ in lhs]
+        ret = [RSS3PC(0, 0, modular=mod_bit, decimal=lhs[0].decimal, binary=True) for _ in lhs]
 
         send_buffer = []
 
@@ -1387,7 +1390,9 @@ class Aby3Protocol:
         msb = []
         for each in decompositions:
             msb.append(
-                RSS3PC((each[0] >> (mod_bit - 1)) & 1, (each[1] >> (mod_bit - 1)) & 1)
+                RSS3PC((each[0] >> (mod_bit - 1)) & 1, (each[1] >> (mod_bit - 1)) & 1, 
+                       modular=mod_bit, 
+                       decimal=values[0].decimal)
             )
 
         msb = self.bit_injection(msb)
