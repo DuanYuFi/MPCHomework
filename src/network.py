@@ -18,6 +18,9 @@ class Player:
     num_players: int
     recv_buffers: list
 
+    bytes_sent: int
+    bytes_recv: int
+
     base_port: int = 34267
 
     def __init__(self, player_id, num_players, port_base=None, debug=False):
@@ -27,6 +30,9 @@ class Player:
 
         if port_base is not None:
             self.base_port = port_base
+
+        self.bytes_recv = 0
+        self.bytes_sent = 0
 
         server_thread = threading.Thread(target=self.start_server)
         server_thread.start()
@@ -122,6 +128,8 @@ class Player:
             player_offset = -1
 
         player_idx = (player_offset + 1) >> 1
+        self.bytes_sent += len(data)
+
         self.parties[player_idx].send(data)
 
     def _recv_handler(self, player_index):
@@ -166,6 +174,8 @@ class Player:
 
         if self.log_file:
             self.log_file.write(f"Received {data} from player {player_offset}\n")
+
+        self.bytes_recv += len(data)
 
         return data
 

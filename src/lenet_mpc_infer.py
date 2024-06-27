@@ -370,10 +370,14 @@ def infer(inputs):
     revealed_outputs = MatrixND(
         outputs.shape, protocol.reveal(outputs.flatten().tolist())
     )
+
+    bytes_sent = protocol.player.bytes_sent
+    bytes_recv = protocol.player.bytes_recv
+
     protocol.disconnect()
 
     # 显示结果
-    return revealed_outputs
+    return revealed_outputs, (bytes_sent, bytes_recv)
 
 
 def test_accuracy():
@@ -397,9 +401,12 @@ def test_accuracy():
     correct = 0
     total = 0
 
+    comm_sent = 0
+    comm_recv = 0
+
     for i, (inputs, labels) in enumerate(test_loader):
         padded_inputs = F.pad(inputs, (2, 2, 2, 2))
-        outputs = infer(padded_inputs)
+        outputs, (bytes_sent, bytes_recv) = infer(padded_inputs)
         predicted = np.argmax(outputs, axis=1)
         total += labels.size(0)
         correct += (predicted == labels.numpy()).sum().item()
@@ -407,6 +414,19 @@ def test_accuracy():
             f"Testing [{i+1}/{len(test_loader)}]: Accuracy => {correct} / {total} = {100 * correct / total:.4f}"
         )
 
+        comm_sent += bytes_sent
+        comm_recv += bytes_recv
+    
+    return comm_sent, comm_recv
+
 
 if __name__ == "__main__":
-    test_accuracy()
+    import time
+
+    start = time.time_ns()
+    comm_sent, comm_recv = test_accuracy()
+    end = time.time_ns()
+
+    print(f"Time elapsed: {(end - start) / 1e9:.2f} seconds")
+    print(f"Communication sent: {comm_sent / 1024:.2f} KB")
+    print(f"Communication received: {comm_recv / 1024:.2f} KB")
