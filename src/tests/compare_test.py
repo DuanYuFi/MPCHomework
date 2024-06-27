@@ -17,7 +17,7 @@ b = protocol.input_share(input_f, 0)
 
 c = protocol.compare(a, b)
 
-result = protocol.reveal(c, to=0)
+result = protocol.reveal(c)
 
 print(result)
 

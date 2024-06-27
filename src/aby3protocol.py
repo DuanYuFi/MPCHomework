@@ -1157,7 +1157,7 @@ class Aby3Protocol:
             list: The n bit sum of the two numbers.
         """
 
-        assert len(a) == len(b), "Lengths of a and b must be equal"
+        assert len(a) == len(b), f"Lengths of a ({len(a)}) and b ({len(b)}) must be equal"
 
         decimal = a[0].decimal
         binary = a[0].binary
@@ -1165,39 +1165,46 @@ class Aby3Protocol:
         a_bits = []
         b_bits = []
 
+        batch_size = 1024
+
+        a_slices = [a[i:i + batch_size] for i in range(0, len(a), batch_size)]
+        b_slices = [b[i:i + batch_size] for i in range(0, len(b), batch_size)]
+
         for i in range(bit_length):
             tmp_a = []
             tmp_b = []
-            for ai, bi in zip(a, b):
-                tmp_a.append(RSS3PC((ai[0] >> i) & 1, (ai[1] >> i) & 1, modular=1))
-                tmp_b.append(RSS3PC((bi[0] >> i) & 1, (bi[1] >> i) & 1, modular=1))
+            for a_slice, b_slice in zip(a_slices, b_slices):
+                tmp_a.append(RSS3PC(sum(((a_slice[k][0] >> i) & 1) * 2 ** k for k in range(len(a_slice))), sum(((a_slice[k][1] >> i) & 1) * 2 ** k for k in range(len(a_slice))), modular=batch_size))
+                tmp_b.append(RSS3PC(sum(((b_slice[k][0] >> i) & 1) * 2 ** k for k in range(len(b_slice))), sum(((b_slice[k][1] >> i) & 1) * 2 ** k for k in range(len(b_slice))), modular=batch_size))
+
             a_bits.append(tmp_a)
             b_bits.append(tmp_b)
 
         result = []
-        carry = [RSS3PC(0, 0, modular=1) for _ in range(len(a))]
+        carry = [RSS3PC(0, 0, modular=batch_size) for _ in range(len(a_slices))]
         for i in range(bit_length):
             sum_bit, carry = self.adder(a_bits[i], b_bits[i], carry)
             result.append(sum_bit)
 
         ret = []
 
-        for i in range(len(a)):
-            ret.append(
-                RSS3PC(
-                    sum(
-                        result[k][i][0] << k
-                        for k in range(bit_length)
-                    ), 
-                    sum(
-                        result[k][i][1] << k
-                        for k in range(bit_length)
-                    ),
-                    modular=bit_length,
-                    binary=binary,
-                    decimal=decimal
+        for i, a_slice in enumerate(a_slices):
+            for j in range(len(a_slice)):
+                ret.append(
+                    RSS3PC(
+                        sum(
+                            ((result[k][i][0] >> j) & 1) << k
+                            for k in range(bit_length)
+                        ), 
+                        sum(
+                            ((result[k][i][1] >> j) & 1) << k
+                            for k in range(bit_length)
+                        ),
+                        modular=bit_length,
+                        binary=binary,
+                        decimal=decimal
+                    )
                 )
-            )
 
         return ret
 
