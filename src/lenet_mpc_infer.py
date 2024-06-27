@@ -9,7 +9,7 @@ from rich.progress import Progress
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from aby3protocol import Aby3Protocol, Matrix
+from aby3protocol_p import Aby3Protocol, Matrix
 
 cur_dir = os.path.dirname(__file__)
 out_dir = os.path.join(cur_dir, "..", "output")
