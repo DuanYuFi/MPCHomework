@@ -9,7 +9,7 @@ from rich.progress import Progress
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from aby3protocol_p import Aby3Protocol, Matrix
+from aby3protocol import Aby3Protocol, Matrix
 
 cur_dir = os.path.dirname(__file__)
 out_dir = os.path.join(cur_dir, "..", "output")
@@ -69,22 +69,22 @@ def conv2d(
                         C_in * K_H, K_W
                     )
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
-                    mat_res = protocol.mat_mul(
-                        sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
-                    )
-                    Z[n, c_out, h, w] = [mat_res.data[0]]
-                    for x in mat_res.data[1:]:
+                    Z[n, c_out, h, w] = [b[c_out]]
+                    
+                    x_kernel = protocol.mul(sub_matrix.flatten().tolist(), kernel_matrix.flatten().tolist())
+                    for x in x_kernel:
                         Z[n, c_out, h, w] = protocol.add(Z[n, c_out, h, w], [x])
+                    
                     Z[n, c_out, h, w] = Z[n, c_out, h, w][0]
                     progress.advance(child_task_id)
         progress.remove_task(child_task_id)
 
     X = MatrixND(Z.shape, Z)
-    X_shared = MatrixND(
-        X.shape, protocol.reveal(X.flatten().tolist())
-    )
-    print("Output from conv2d: ")
-    print(X_shared)
+    # X_shared = MatrixND(
+    #     X.shape, protocol.reveal(X.flatten().tolist())
+    # )
+    # print("Output from conv2d: ")
+    # print(X_shared)
     return X
 
 
@@ -130,11 +130,11 @@ def avg_pool(
     progress.remove_task(child_task_id)
 
     X = MatrixND(Z.shape, Z)
-    X_shared = MatrixND(
-        X.shape, protocol.reveal(X.flatten().tolist())
-    )
-    print("Output from avg_pool: ")
-    print(X_shared)
+    # X_shared = MatrixND(
+    #     X.shape, protocol.reveal(X.flatten().tolist())
+    # )
+    # print("Output from avg_pool: ")
+    # print(X_shared)
     return X
 
 
@@ -144,11 +144,11 @@ def relu(X: MatrixND, protocol: Aby3Protocol = None) -> MatrixND:
     relu_output = protocol.max_sp(X.flatten().tolist(), zero_matrix.flatten().tolist())
 
     X = MatrixND(X.shape, relu_output)
-    X_shared = MatrixND(
-        X.shape, protocol.reveal(X.flatten().tolist())
-    )
-    print("Output from relu: ")
-    print(X_shared)
+    # X_shared = MatrixND(
+    #     X.shape, protocol.reveal(X.flatten().tolist())
+    # )
+    # print("Output from relu: ")
+    # print(X_shared)
     return X
 
 
@@ -168,11 +168,11 @@ def dense(
     Z_dims = (batch_size, W.shape[0])
 
     X = MatrixND(Z_dims, Z.data)
-    X_shared = MatrixND(
-        X.shape, protocol.reveal(X.flatten().tolist())
-    )
-    print("Output from dense: ")
-    print(X_shared)
+    # X_shared = MatrixND(
+    #     X.shape, protocol.reveal(X.flatten().tolist())
+    # )
+    # print("Output from dense: ")
+    # print(X_shared)
     return X
 
 
@@ -182,11 +182,11 @@ def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND
         # 创建父任务
         parent_task_id = progress.add_task("[green]LeNet Forward Pass", total=7)
 
-        X_shared = MatrixND(
-            X.shape, protocol.reveal(X.flatten().tolist())
-        )
-        print("Source: ")
-        print(X_shared)
+        # X_shared = MatrixND(
+        #     X.shape, protocol.reveal(X.flatten().tolist())
+        # )
+        # print("Source: ")
+        # print(X_shared)
 
         # 卷积层 1
         progress.update(
@@ -392,7 +392,7 @@ def test_accuracy():
         download=True,
         transform=transform,
     )
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
 
     correct = 0
     total = 0
