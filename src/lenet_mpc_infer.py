@@ -369,9 +369,9 @@ def test_accuracy():
     for i, (inputs, labels) in enumerate(test_loader):
         padded_inputs = F.pad(inputs, (2, 2, 2, 2))
         outputs = infer(padded_inputs)
-        _, predicted = torch.max(outputs.data, 1)
+        predicted = np.argmax(outputs, axis=1)
         total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+        correct += (predicted == labels.numpy()).sum().item()
         print(
             f"Testing [{i+1}/{len(test_loader)}]: Accuracy => {correct} / {total} = {100 * correct / total:.4f}"
         )
