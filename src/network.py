@@ -170,12 +170,11 @@ class Player:
         player_idx = (player_offset + 1) >> 1
         size = int.from_bytes(self._recvall(player_idx, 4), "big")
         data = self._recvall(player_idx, size)
-        data = pickle.loads(data)
+        self.bytes_recv += len(data)
 
+        data = pickle.loads(data)
         if self.log_file:
             self.log_file.write(f"Received {data} from player {player_offset}\n")
-
-        self.bytes_recv += len(data)
 
         return data
 
