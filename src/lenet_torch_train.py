@@ -64,30 +64,36 @@ test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
 # 模型实例化
 model = LeNet5()
 
-# 损失函数和优化器
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+state_path = os.path.join(out_dir, f"lenet5_params.pth")
+if not os.path.exists(state_path) or os.getenv("OVERWRITE", False):
+    # 损失函数和优化器
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-# 训练模型
-num_epochs = 10
-for epoch in range(num_epochs):
-    model.train()
-    running_loss = 0.0
-    for i, (inputs, labels) in enumerate(train_loader):
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item()
-        if (i + 1) % 100 == 0:
-            tqdm.write(
-                f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {running_loss / 100:.4f}"
-            )
-            running_loss = 0.0
+    # 训练模型
+    num_epochs = 10
+    for epoch in range(num_epochs):
+        model.train()
+        running_loss = 0.0
+        for i, (inputs, labels) in enumerate(train_loader):
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+            if (i + 1) % 100 == 0:
+                tqdm.write(
+                    f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {running_loss / 100:.4f}"
+                )
+                running_loss = 0.0
 
+    print("Finished Training")
 
-print("Finished Training")
+    # 保存模型参数到指定文件夹
+    torch.save(model.state_dict(), state_path)
+else:
+    model.load_state_dict(torch.load(state_path))
 
 # 测试模型
 model.eval()
@@ -101,7 +107,3 @@ with torch.no_grad():
         correct += (predicted == labels).sum().item()
 
 print(f"Accuracy of the network on the 10000 test images: {100 * correct / total} %")
-
-# 保存模型参数到指定文件夹
-state_path = os.path.join(out_dir, f"lenet5_params.pth")
-torch.save(model.state_dict(), state_path)
