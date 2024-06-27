@@ -69,17 +69,23 @@ def conv2d(
                         C_in * K_H, K_W
                     )
                     kernel_matrix = W[c_out].reshape(C_in * K_H, K_W)
-                    mat_res = protocol.mat_mul_ss(
+                    mat_res = protocol.mat_mul(
                         sub_matrix.to_mpc_matrix(), kernel_matrix.T.to_mpc_matrix()
                     )
                     Z[n, c_out, h, w] = [mat_res.data[0]]
                     for x in mat_res.data[1:]:
-                        Z[n, c_out, h, w] = protocol.add_ss(Z[n, c_out, h, w], [x])
+                        Z[n, c_out, h, w] = protocol.add(Z[n, c_out, h, w], [x])
                     Z[n, c_out, h, w] = Z[n, c_out, h, w][0]
                     progress.advance(child_task_id)
         progress.remove_task(child_task_id)
 
-    return MatrixND(Z.shape, Z)
+    X = MatrixND(Z.shape, Z)
+    X_shared = MatrixND(
+        X.shape, protocol.reveal(X.flatten().tolist())
+    )
+    print("Output from conv2d: ")
+    print(X_shared)
+    return X
 
 
 # 平均池化操作
@@ -112,7 +118,7 @@ def avg_pool(
                     if i == 0 and j == 0:
                         continue  # 第一个值已经设置为 sum_vals 的初始值
                     X_slice = X[:, :, vert_start + i, horiz_start + j]
-                    sum_list = protocol.add_ss(
+                    sum_list = protocol.add(
                         sum_vals.flatten().tolist(), X_slice.flatten().tolist()
                     )
                     sum_vals = np.array(sum_list).reshape(sum_vals.shape)
@@ -123,7 +129,13 @@ def avg_pool(
             progress.advance(child_task_id)
     progress.remove_task(child_task_id)
 
-    return MatrixND(Z.shape, Z)
+    X = MatrixND(Z.shape, Z)
+    X_shared = MatrixND(
+        X.shape, protocol.reveal(X.flatten().tolist())
+    )
+    print("Output from avg_pool: ")
+    print(X_shared)
+    return X
 
 
 # ReLU 激活函数
@@ -131,7 +143,13 @@ def relu(X: MatrixND, protocol: Aby3Protocol = None) -> MatrixND:
     zero_matrix = np.zeros(X.shape, dtype=object)
     relu_output = protocol.max_sp(X.flatten().tolist(), zero_matrix.flatten().tolist())
 
-    return MatrixND(X.shape, relu_output)
+    X = MatrixND(X.shape, relu_output)
+    X_shared = MatrixND(
+        X.shape, protocol.reveal(X.flatten().tolist())
+    )
+    print("Output from relu: ")
+    print(X_shared)
+    return X
 
 
 # 扁平化，保留 batchsize 的维度
@@ -143,12 +161,19 @@ def flatten(X: MatrixND) -> MatrixND:
 def dense(
     X: MatrixND, W: MatrixND, b: MatrixND, protocol: Aby3Protocol = None
 ) -> MatrixND:
-    Z = protocol.mat_mul_ss(X.to_mpc_matrix(), W.T.to_mpc_matrix())
+    Z = protocol.mat_mul(X.to_mpc_matrix(), W.T.to_mpc_matrix())
     batch_size = X.shape[0]
     b_reshaped = np.tile(b, (batch_size, 1))
-    Z = protocol.mat_add_ss(Z, MatrixND(b_reshaped.shape, b_reshaped).to_mpc_matrix())
+    Z = protocol.mat_add(Z, MatrixND(b_reshaped.shape, b_reshaped).to_mpc_matrix())
     Z_dims = (batch_size, W.shape[0])
-    return MatrixND(Z_dims, Z.data)
+
+    X = MatrixND(Z_dims, Z.data)
+    X_shared = MatrixND(
+        X.shape, protocol.reveal(X.flatten().tolist())
+    )
+    print("Output from dense: ")
+    print(X_shared)
+    return X
 
 
 # LeNet-5 前向传播
@@ -156,6 +181,12 @@ def lenet_forward(X: MatrixND, params: dict, protocol: Aby3Protocol) -> MatrixND
     with Progress() as progress:
         # 创建父任务
         parent_task_id = progress.add_task("[green]LeNet Forward Pass", total=7)
+
+        X_shared = MatrixND(
+            X.shape, protocol.reveal(X.flatten().tolist())
+        )
+        print("Source: ")
+        print(X_shared)
 
         # 卷积层 1
         progress.update(

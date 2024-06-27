@@ -719,6 +719,8 @@ class Aby3Protocol:
 
         elif operation == "mat_mul":
             ret = Matrix(ret.nrows, ret.ncols, self.shift_right(ret.data, self.demical))
+        
+        if "mat" in operation:
             for i in range(len(ret.data)):
                 ret.data[i].set_decimal(self.demical)
 
