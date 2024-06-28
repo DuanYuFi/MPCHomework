@@ -69,38 +69,13 @@ Most MPC basic blocks are from [ABY3](https://eprint.iacr.org/2018/403.pdf): A M
   ![Image 1](imgs/lenet.svg)
   The LeNet-5 primarily consists of seven computational units, which include the fundamental computational modules: Convolution, Average Pooling, ReLU, and Dense. The MPC operations involved in each module are shown in the table below, where 'sp' represents operations between secret and public data, 'ss' represents operations between secret data, and 'mat' represents matrix operations:
 
-<table style="margin-left: auto; margin-right: auto;">
-  <tr>
-    <th>Module</th>
-    <th>MPC Operations</th>
-  </tr>
-  <tr>
-    <td>Convolution</td>
-    <td><code>mul_ss</code> and <code>add_ss</code></td>
-  </tr>
-  <tr>
-    <td>Average Pooling</td>
-    <td><code>add_ss</code> and <code>div_sp</code></td>
-  </tr>
-  <tr>
-    <td>ReLU</td>
-    <td><code>max_sp</code></td>
-  </tr>
-  <tr>
-    <td>Dense</td>
-    <td><code>mat_add_ss</code> and <code>mat_mul_sp</code></td>
-  </tr>
-</table>
 
-
-
-
-| Module          | MPC Operations         |
-|-----------------|------------------------|
-| Convolution     | `mul_ss` and `add_ss`  |
-| Average Pooling | `add_ss` and `div_sp`  |
-| ReLU            | `max_sp`               |
-| Dense           | `mat_add_ss` and `mat_mul_sp` |
+  | Module          | MPC Operations         |
+  |-----------------|------------------------|
+  | Convolution     | `mul_ss` and `add_ss`  |
+  | Average Pooling | `add_ss` and `div_sp`  |
+  | ReLU            | `max_sp`               |
+  | Dense           | `mat_add_ss` and `mat_mul_sp` |
 
 ### Experiment Results 
 We run the experiments on a single machine with 3 processes, each player equipped with one Intel(R) Xeon(R) Platinum 8358 CPU @ 2.60GHz and 1GB RAM. We assume party 0 provide the parameters and party 1 provide input image.
