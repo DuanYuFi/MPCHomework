@@ -426,6 +426,19 @@ def test_accuracy():
         table.add_row(*row)
         return table
 
+    def format_time(seconds):
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            seconds = seconds % 60
+            return f"{minutes}min {seconds}s"
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            seconds = seconds % 60
+            return f"{hours}h {minutes}min {seconds}s"
+
     progress = Progress(
         TextColumn("[bold blue]{task.description}"),
         BarColumn(),
@@ -458,9 +471,9 @@ def test_accuracy():
 
             table = create_table(
                 f"{i + 1} / {len(test_loader)}",
-                f"{accuracy:.2f}",
-                f"{elapsed_time:.2f}",
-                f"{avg_time_per_batch:.2f}s",
+                f"{accuracy}",
+                f"{format_time(int(elapsed_time))}",
+                f"{format_time(int(avg_time_per_batch))}",
                 f"{avg_sent_per_batch / 1024:.2f}KB",
                 f"{avg_recv_per_batch / 1024:.2f}KB",
             )

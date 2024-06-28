@@ -44,7 +44,7 @@
   python3 src/lenet_torch_train.py
   ```
 
-- Try to infer LeNet-5 in MPC enviroments, only Player-0 will load the picture as model private input.
+- Try to infer LeNet-5 in MPC enviroments, only Player-0 will load the model parameters and Player-1 will load the picture as model private input.
 
   ```bash
   cd src/
@@ -61,8 +61,9 @@ Most MPC basic blocks are from [ABY3](https://eprint.iacr.org/2018/403.pdf): A M
 
 - **MPC Settings:** We use a three-party scenario, with at most one corrupted (semi-honest) party. We use $Z_{2^{64}}$ as the basic ring for the computation, and use fixed-point representation with 20-bit precision. In addition, we ran 10 iterations in gold-schmidt approximation for division.
 
-- **LeNet-5 Settings:** TBA.
+- **LeNet-5 Settings:** 
+  LeNet-5 is a classic convolutional neural network architecture designed for handwritten and machine-printed character recognition. We use [MNIST datasets](https://en.wikipedia.org/wiki/MNIST_database) as the training and testing dataset for the model. The MNIST database is a large database of handwritten digits that is commonly used for training various image processing systems. The MNIST database contains 60,000 training images and 10,000 testing images.
 
 - **Experiment Results:** We run the experiments on a single machine with 3 processes, each player equipped with one Intel(R) Xeon(R) Platinum 8358 CPU @ 2.60GHz and 1GB RAM. We assume party 0 provide the parameters and party 1 provide input image.
 ![Image 1](imgs/image.png)
-From the above figure, we can see that each inference costs 160.78s, with about 26.753 MB communication cost. The accuracy in plaintext inference is 99.11% on this dataset. In our secure inference, we got 99.19% accuracy for the first 185 samples on this dataset. 
+From the above figure, we can see that each inference costs 160.78s, with about 26.753 MB communication cost. The accuracy in plain text inference is 99.11% on this dataset. In our secure inference, we got 99.19% accuracy for the first 185 samples on this dataset. 
