@@ -471,7 +471,7 @@ def test_accuracy():
 
             table = create_table(
                 f"{i + 1} / {len(test_loader)}",
-                f"{accuracy}",
+                f"{accuracy:.2f}",
                 f"{format_time(int(elapsed_time))}",
                 f"{format_time(int(avg_time_per_batch))}",
                 f"{avg_sent_per_batch / 1024:.2f}KB",
